@@ -4,10 +4,10 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go"
 	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-utils-go"
-	"github.com/Financial-Times/people-rw-neo4j/people"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jawher/mow.cli"
 	"github.com/jmcvetta/neoism"
@@ -34,18 +34,18 @@ func main() {
 		}
 
 		batchRunner := neocypherrunner.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
-		peopleDriver := people.NewCypherDriver(batchRunner, db)
-		peopleDriver.Initialise()
+		driver := annotations.NewCypherDriver(batchRunner, db)
+		driver.Initialise()
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
 		engs := map[string]baseftrwapp.Service{
-			"people": peopleDriver,
+			"annotations": driver,
 		}
 
 		baseftrwapp.RunServer(engs,
-			"ft-people_rw_neo4j ServiceModule",
-			"Writes 'people' to Neo4j, usually as part of a bulk upload done on a schedule",
+			"ft-annotations_rw_neo4j ServiceModule",
+			"Writes 'annotations' to Neo4j, usually as part of a bulk upload done on a schedule",
 			*port)
 	}
 

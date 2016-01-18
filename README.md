@@ -1,73 +1,54 @@
-# People Reader/Writer for Neo4j (people-rw-neo4j)
+# Annotations Reader/Writer for Neo4j (annotations-rw-neo4j)
 
-__An API for reading/writing people into Neo4j. Expects the people json supplied to be in the format that comes out of the people transformer.__
+__An API for reading/writing annotations into Neo4j. Expects the people json supplied to be in the format that comes out of the annotations consumer.__
 
-## Installation
+## Build & deployment etc:
+*TODO*
+_NB You will need to tag a commit in order to build, since the UI asks for a tag to build / deploy_
+* [Jenkins view](http://ftjen10085-lvpr-uk-p:8181/view/annotations-private-rw)
+* [Build and publish to forge](http://ftjen10085-lvpr-uk-p:8181/job/annotations-private-rw)
+* [Deploy to test or production](http://ftjen10085-lvpr-uk-p:8181/job/annotations-private-rw)
 
-For the first time:
 
-`go get github.com/Financial-Times/people-rw-neo4j`
+## Installation & running locally
+* `go get -u github.com/Financial-Times/annotations-private-rw`
+* `cd $GOPATH/src/github.com/Financial-Times/annotations-private-rw`
+* `go test ./...`
+* `go install`
+* `$GOPATH/bin/annotations-private-rw --neo-url={neo4jUrl} --port={port} --log-level={DEBUG|INFO|WARN|ERROR}`
+_All arguments are optional.
+--neo-url defaults to http://localhost:7474/db/data, which is the out of box url for a local neo4j instance.
+--port defaults to 8080.
+--log-level defaults to INFO
+See help text for other arguments._
+* curl http://localhost:8080/annotations/{content_uuid} | json_pp
 
-or update:
+## API definition
+Based on the following google docs:
+* [Read](https://docs.google.com/document/d/1eXaiKlfyAlt9djstWxH6ei82BzRFGfmnJ_obp4eIIvg)
+  `GET /content/{annotatedContentId}/annotations` (V2)
+* [Replace](https://docs.google.com/document/d/1FE-JZDYJlKsxOIuQQkPwyyzcOkJQn8L3nNy1H8A8eDo)
+  `PUT /content/{annotatedContentId}/annotations`
+* [Delete](https://docs.google.com/document/d/1cySUlTuSYlv8ANikLlfToezSiRERa0sBdO2eVqy1FXM)
+  `DELETE /content/{contentId}/annotations/mentions/{conceptId}`
 
-`go get -u github.com/Financial-Times/people-rw-neo4j`
+## Healthchecks
+* Check connectivity [http://localhost:8080/__health](http://localhost:8080/__health)
+* Ping: [http://localhost:8080/__ping](http://localhost:8080/__ping)
 
-## Running
+## TODO
+### Things to resolve, check or otherwise investigate
+* Do we need to do the V1-V2 facade (Internal) request for GET requests ?
 
-`$GOPATH/bin/people-rw-neo4j --neo-url={neo4jUrl} --port={port} --batchSize=50 --graphiteTCPAddress=graphite.ft.com:2003 --graphitePrefix=content.{env}.people.rw.neo4j.{hostname} --logMetrics=false
+### API specific
+* Complete Test cases
+* Runbook
+* Update or new API documentation based on original google docs
 
-All arguments are optional, they default to a local Neo4j install on the default port (7474), application running on port 8080, batchSize of 1024, graphiteTCPAddress of "" (meaning metrics won't be written to Graphite), graphitePrefix of "" and logMetrics false.
-
-NB: the default batchSize is much higher than the throughput the instance data ingester currently can cope with.
-
-## Updating the model
-Use gojson against a transformer endpoint to create a person struct and update the person/model.go file. NB: we DO need a separate identifier struct
-
-`curl http://ftaps35629-law1a-eu-t:8080/transformers/people/ad60f5b2-4306-349d-92d8-cf9d9572a6f6 | gojson -name=person`
-
-## Building
-
-This service is built and deployed via Jenkins.
-
-<a href="http://ftjen10085-lvpr-uk-p:8181/job/people-rw-neo4j-build">Build job</a>
-<a href="http://ftjen10085-lvpr-uk-p:8181/job/people-rw-neo4j-deploy">Deploy job</a>
-
-The build works via git tags. To prepare a new release
-- update the version in /puppet/ft-people_rw_neo4j/Modulefile, e.g. to 0.0.12
-- git tag that commit using `git tag 0.0.12`
-- `git push --tags`
-
-The deploy also works via git tag and you can also select the environment to deploy to.
-
-## Endpoints
-/people/{uuid}
-### PUT
-The only mandatory field is the uuid, and the uuid in the body must match the one used on the path.
-
-Every request results in an attempt to update that person: unlike with GraphDB there is no check on whether the person already exists and whether there are any changes between what's there and what's being written. We just do a MERGE which is Neo4j for create if not there, update if it is there.
-
-A successful PUT results in 200.
-
-We run queries in batches. If a batch fails, all failing requests will get a 500 server error response.
-
-Invalid json body input, or uuids that don't match between the path and the body will result in a 400 bad request response.
-
-Example:
-`curl -XPUT -H "X-Request-Id: 123" -H "Content-Type: application/json" localhost:8080/people/3fa70485-3a57-3b9b-9449-774b001cd965 --data '{"uuid":"3fa70485-3a57-3b9b-9449-774b001cd965", "birthYear": 1974, "salutation": "Mr", "name":"Robert W. Addington", "identifiers":[{ "authority":"http://api.ft.com/system/FACTSET-PPL", "identifierValue":"000BJG-E"}]}'`
-
-### GET
-Thie internal read should return what got written (i.e., this isn't the public person read API)
-
-If not found, you'll get a 404 response.
-
-Empty fields are omitted from the response.
-`curl -H "X-Request-Id: 123" localhost:8080/people/3fa70485-3a57-3b9b-9449-774b001cd965`
-
-### DELETE
-Will return 204 if successful, 404 if not found
-`curl -XDELETE -H "X-Request-Id: 123" localhost:8080/people/3fa70485-3a57-3b9b-9449-774b001cd965`
-
-### Admin endpoints
-Healthchecks: [http://localhost:8080/__health](http://localhost:8080/__health)
-
-Ping: [http://localhost:8080/ping](http://localhost:8080/ping) or [http://localhost:8080/__ping](http://localhost:8080/__ping)
+### Cross cutting concerns
+* Allow service to start if neo4j is unavailable at startup time
+* Rework build / deploy (low priority)
+  * Suggested flow:
+    1. Build & Tests
+    1. Publish Release (using konstructor to generate vrm)
+    1. Deploy vrm/hash to test/prod

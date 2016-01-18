@@ -1,30 +1,33 @@
-package people
+package annotations
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
+"strings"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-utils-go"
 	"github.com/jmcvetta/neoism"
 )
 
+//CypherDriver connectivity to neo4j datastore
 type CypherDriver struct {
 	cypherRunner neocypherrunner.CypherRunner
 	indexManager neoutils.IndexManager
 }
 
+//NewCypherDriver constructor for the CypherDriver
 func NewCypherDriver(cypherRunner neocypherrunner.CypherRunner, indexManager neoutils.IndexManager) CypherDriver {
 	return CypherDriver{cypherRunner, indexManager}
 }
 
+//Initialise ensures the required indexes have been created
 func (pcd CypherDriver) Initialise() error {
 	return neoutils.EnsureIndexes(pcd.indexManager, map[string]string{
 		"Thing":   "uuid",
 		"Concept": "uuid",
-		"Person":  "uuid"})
+		"Content": "uuid"})
 }
 
 func (pcd CypherDriver) Read(uuid string) (interface{}, bool, error) {
@@ -51,72 +54,57 @@ func (pcd CypherDriver) Read(uuid string) (interface{}, bool, error) {
 	err := pcd.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
 
 	if err != nil {
-		return person{}, false, err
+		return Annotations{}, false, err
 	}
 
 	if len(results) == 0 {
-		return person{}, false, nil
+		return Annotations{}, false, nil
 	}
 
 	result := results[0]
 
-	p := person{
-		UUID:       result.UUID,
-		Name:       result.Name,
-		BirthYear:  result.BirthYear,
-		Salutation: result.Salutation,
-	}
+	p := Annotations{}
 
 	if result.FactsetIdentifier != "" {
-		p.Identifiers = append(p.Identifiers, identifier{fsAuthority, result.FactsetIdentifier})
+		//		p.Identifiers = append(p.Identifiers, identifier{fsAuthority, result.FactsetIdentifier})
 	}
 
 	return p, true, nil
 
 }
 
+func writeQueryStatements() (statements map[string]string) {
+	mergeContent := `MERGE (content:Thing{uuid:contentID})-`
+	concept := `->(concept:Thing{uuid:conceptID})`
+	statements = map[string]string{
+		"Mentions":      mergeContent + `(rel:MENTIONS)` + concept,
+		"About":         mergeContent + `(rel:ABOUT)` + concept,
+		"IsAnnotatedBy": mergeContent + `(rel:ANNOTATED_BY)` + concept,
+		"Describes":     mergeContent + `(rel:DESCRIBES)` + concept,
+	}
+	return statements
+}
+
 func (pcd CypherDriver) Write(thing interface{}) error {
-
-	p := thing.(person)
-
-	params := map[string]interface{}{
-		"uuid": p.UUID,
-	}
-
-	if p.Name != "" {
-		params["name"] = p.Name
-	}
-
-	if p.BirthYear != 0 {
-		params["birthYear"] = p.BirthYear
-	}
-
-	if p.Salutation != "" {
-		params["salutation"] = p.Salutation
-	}
-
-	for _, identifier := range p.Identifiers {
-		if identifier.Authority == fsAuthority {
-			params["factsetIdentifier"] = identifier.IdentifierValue
-		}
-	}
+	queryStatements := writeQueryStatements()
+	annotations := thing.(Annotations)
 
 	query := &neoism.CypherQuery{
-		Statement: `MERGE (n:Thing {uuid: {uuid}})
-					set n={allprops}
-					set n :Concept
-					set n :Person
-		`,
 		Parameters: map[string]interface{}{
-			"uuid":     p.UUID,
-			"allprops": params,
+			"contentID": ,
 		},
+	}
+
+	for _, annotation := range annotations {
+		params := map[string]interface{}{}
+
 	}
 
 	return pcd.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
 
 }
 
+//Delete removes all annotations on a document
 func (pcd CypherDriver) Delete(uuid string) (bool, error) {
 	clearNode := &neoism.CypherQuery{
 		Statement: `
@@ -162,13 +150,15 @@ func (pcd CypherDriver) Delete(uuid string) (bool, error) {
 	return deleted, err
 }
 
+//DecodeJSON decodes json !
 func (pcd CypherDriver) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
-	p := person{}
-	err := dec.Decode(&p)
-	return p, p.UUID, err
+	annotation := Annotation{}
+	err := dec.Decode(&annotation)
+	return annotation, annotation.ID, err
 
 }
 
+// Check ensures the datastore is available
 func (pcd CypherDriver) Check() (check v1a.Check) {
 	type hcUUIDResult struct {
 		UUID string `json:"uuid"`
@@ -208,6 +198,7 @@ func (pcd CypherDriver) Check() (check v1a.Check) {
 	}
 }
 
+//Count is a simple stats endpoint that counts the number of annotations
 func (pcd CypherDriver) Count() (int, error) {
 
 	results := []struct {
@@ -227,7 +218,3 @@ func (pcd CypherDriver) Count() (int, error) {
 
 	return results[0].Count, nil
 }
-
-const (
-	fsAuthority = "http://api.ft.com/system/FACTSET-PPL"
-)

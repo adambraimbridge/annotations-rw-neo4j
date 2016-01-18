@@ -1,0 +1,122 @@
+package annotations
+
+import (
+	"errors"
+	"fmt"
+
+	//	"github.com/Financial-Times/uri-utils-go"
+	log "github.com/Sirupsen/logrus"
+	"github.com/jmcvetta/neoism"
+)
+
+// Driver interface
+type Driver interface {
+	Read(contentUUID string) (annotations Annotations, found bool, err error)
+	Delete(contentUUID string, conceptUUID string) (err error)
+	Create(contentUUID string, annotation Annotation) (err error)
+	CheckConnectivity() (err error)
+}
+
+// CypherDriver struct
+type CypherDriver struct {
+	db *neoism.Database
+}
+
+//NewCypherDriver instantiate driver
+func NewCypherDriver(db *neoism.Database) CypherDriver {
+	return CypherDriver{db}
+}
+
+// CheckConnectivity tests neo4j by running a simple cypher query
+func (pcw CypherDriver) CheckConnectivity() error {
+	results := []struct {
+		ID int
+	}{}
+	query := &neoism.CypherQuery{
+		Statement: "MATCH (x) RETURN ID(x) LIMIT 1",
+		Result:    &results,
+	}
+	err := pcw.db.Cypher(query)
+	log.Debugf("CheckConnectivity results:%+v  err: %+v", results, err)
+	return err
+}
+
+type neoChangeEvent struct {
+	StartedAt string
+	EndedAt   string
+}
+
+type neoReadStruct struct {
+	P struct {
+		ID        string
+		Types     []string
+		PrefLabel string
+		Labels    []string
+	}
+	M []struct {
+		M struct {
+			ID           string
+			Types        []string
+			PrefLabel    string
+			Title        string
+			ChangeEvents []neoChangeEvent
+		}
+		O struct {
+			ID        string
+			Types     []string
+			PrefLabel string
+			Labels    []string
+		}
+		R []struct {
+			ID           string
+			Types        []string
+			PrefLabel    string
+			ChangeEvents []neoChangeEvent
+		}
+	}
+}
+
+func (pcw CypherDriver) Read(contentUUID string) (annotations Annotations, found bool, err error) {
+	results := []struct {
+		Rs []neoReadStruct
+	}{}
+	query := &neoism.CypherQuery{
+		Statement: `
+                        MATCH (p:Person{uuid:{uuid}})<-[:HAS_MEMBER]-(m:Membership)
+                        OPTIONAL MATCH (m)-[:HAS_ORGANISATION]->(o:Organisation)
+                        OPTIONAL MATCH (m)-[rr:HAS_ROLE]->(r:Role)
+                        WITH
+                                { id:p.uuid, types:labels(p), prefLabel:p.prefLabel, labels:p.labels} as p,
+                                { id:o.uuid, types:labels(o), prefLabel:o.prefLabel, labels:o.labels} as o,
+                                { id:m.uuid, types:labels(m), prefLabel:m.prefLabel, title:m.title, changeEvents:[{startedAt:m.inceptionDate}, {endedAt:m.terminationDate}] } as m,
+                                { id:r.uuid, types:labels(r), prefLabel:r.prefLabel, changeEvents:[{startedAt:m.inceptionDate}, {endedAt:m.terminationDate}] } as r
+                        WITH p, m, o, collect(r) as r
+                        WITH p, collect({m:m, o:o, r:r}) as m
+                        RETURN collect ({p:p, m:m}) as rs
+                `,
+		Parameters: neoism.Props{"uuid": contentUUID},
+		Result:     &results,
+	}
+	err = pcw.db.Cypher(query)
+	if err != nil {
+		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v\n", contentUUID, query.Statement, err)
+		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
+	}
+	log.Debugf("CypherResult Read Annotations for uuid: %s was: %+v", contentUUID, results)
+	if (len(results)) == 0 || len(results[0].Rs) == 0 {
+		return Annotations{}, false, nil
+	} else if len(results) != 1 && len(results[0].Rs) != 1 {
+		errMsg := fmt.Sprintf("Multiple people found with the same uuid:%s !", contentUUID)
+		log.Error(errMsg)
+		return Annotations{}, true, errors.New(errMsg)
+	}
+	annotations = neoReadStructToAnnotations(results[0].Rs[0])
+	log.Debugf("Returning %v", annotations)
+	return annotations, true, nil
+}
+
+func neoReadStructToAnnotations(neo neoReadStruct) (annotations Annotations) {
+
+	log.Debugf("neoReadStructToPerson neo: %+v result: %+v", neo, annotations)
+	return annotations
+}
