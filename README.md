@@ -25,10 +25,10 @@ See help text for other arguments._
 
 ## API definition
 Based on the following google docs:
-* [Read](https://docs.google.com/document/d/1eXaiKlfyAlt9djstWxH6ei82BzRFGfmnJ_obp4eIIvg)
-  `GET /content/{annotatedContentId}/annotations` (V2)
 * [Replace](https://docs.google.com/document/d/1FE-JZDYJlKsxOIuQQkPwyyzcOkJQn8L3nNy1H8A8eDo)
   `PUT /content/{annotatedContentId}/annotations`
+* Read is the inverse of the PUT / Replace (i.e. this is not the public annotation reader)
+  `GET /content/{annotatedContentId}/annotations`
 * [Delete](https://docs.google.com/document/d/1cySUlTuSYlv8ANikLlfToezSiRERa0sBdO2eVqy1FXM)
   `DELETE /content/{contentId}/annotations/mentions/{conceptId}`
 

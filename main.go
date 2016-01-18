@@ -1,16 +1,21 @@
 package main
 
 import (
-	_ "net/http/pprof"
-	"os"
-
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go"
+	"github.com/Financial-Times/go-fthealth/v1a"
+	"github.com/Financial-Times/http-handlers-go"
 	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-utils-go"
 	log "github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/jmcvetta/neoism"
+	"github.com/rcrowley/go-metrics"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"strings"
 )
 
 func main() {
@@ -26,28 +31,52 @@ func main() {
 	graphitePrefix := app.StringOpt("graphitePrefix", "",
 		"Prefix to use. Should start with content, include the environment, and the host name. e.g. content.test.people.rw.neo4j.ftaps58938-law1a-eu-t")
 	logMetrics := app.BoolOpt("logMetrics", false, "Whether to log metrics. Set to true if running locally and you want metrics output")
+	logLevel := app.StringOpt("log-level", "INFO", "Logging level (DEBUG, INFO, WARN, ERROR)")
 
 	app.Action = func() {
+		setLogLevel(strings.ToUpper(*logLevel))
 		db, err := neoism.Connect(*neoURL)
 		if err != nil {
-			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
+			log.Fatalf("Error connecting to neo4j %s", err)
 		}
-
 		batchRunner := neocypherrunner.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
-		driver := annotations.NewCypherDriver(batchRunner, db)
-		driver.Initialise()
+		annotations.AnnotationsDriver = annotations.NewCypherDriver(batchRunner, db)
+		r := mux.NewRouter()
+
+		// Healthchecks and standards first
+		r.HandleFunc("/__health", v1a.Handler("PeopleReadWriteNeo4j Healthchecks",
+			"Checks for accessing neo4j", annotations.HealthCheck()))
+		r.HandleFunc("/ping", annotations.Ping)
+		r.HandleFunc("/__ping", annotations.Ping)
+
+		// Then API specific ones:
+		r.HandleFunc("/people/{uuid}", annotations.GetAnnotations).Methods("GET")
+
+		if err := http.ListenAndServe(":"+string(*port),
+			httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
+				httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), r))); err != nil {
+			log.Fatalf("Unable to start server: %v", err)
+		}
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-
-		engs := map[string]baseftrwapp.Service{
-			"annotations": driver,
-		}
-
-		baseftrwapp.RunServer(engs,
-			"ft-annotations_rw_neo4j ServiceModule",
-			"Writes 'annotations' to Neo4j, usually as part of a bulk upload done on a schedule",
-			*port)
+		log.Infof("public-people-api will listen on port: %s, connecting to: %s", *port, *neoURL)
 	}
-
 	app.Run(os.Args)
+}
+
+func setLogLevel(level string) {
+	switch level {
+	case "DEBUG":
+		log.SetLevel(log.DebugLevel)
+	case "INFO":
+		log.SetLevel(log.InfoLevel)
+	case "WARN":
+		log.SetLevel(log.WarnLevel)
+	case "ERROR":
+		log.SetLevel(log.ErrorLevel)
+	default:
+		log.Errorf("Requested log level %s is not supported, will default to INFO level", level)
+		log.SetLevel(log.InfoLevel)
+	}
+	log.Debugf("Logging level set to %s", level)
 }

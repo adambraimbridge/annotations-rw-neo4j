@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// PeopleDriver for cypher queries
-var store Driver
+// AnnotationsDriver for cypher queries
+var AnnotationsDriver Driver
 
 // HealthCheck does something
 func HealthCheck() v1a.Check {
@@ -27,7 +27,7 @@ func HealthCheck() v1a.Check {
 
 // Checker does more stuff
 func Checker() (string, error) {
-	err := store.CheckConnectivity()
+	err := AnnotationsDriver.CheckConnectivity()
 	if err == nil {
 		return "Connectivity to neo4j is ok", err
 	}
@@ -85,7 +85,7 @@ func GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"message":"uuid required"}`, http.StatusBadRequest)
 		return
 	}
-	annotations, found, err := store.Read(uuid)
+	annotations, found, err := AnnotationsDriver.Read(uuid)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		message := fmt.Sprintf(`{"message": "%s"}`, err.Error())
