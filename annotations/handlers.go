@@ -2,12 +2,13 @@ package annotations
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"net/http"
-	//"strings"
+	"strings"
 )
 
 // AnnotationsDriver for cypher queries
@@ -43,16 +44,22 @@ func jsonMessage(msgText string) []byte {
 	return []byte(fmt.Sprintf(`{"message":"%s"}`, msgText))
 }
 
+func isContentTypeJSON(r *http.Request) error {
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	if !strings.Contains(contentType, "application/json") {
+		return errors.New("Http Header 'Content-Type' is not 'application/json', this is a JSON API")
+	}
+	return nil
+}
+
 // PutAnnotations handles the replacement of a set of annotations for a given bit of content
 func PutAnnotations(w http.ResponseWriter, r *http.Request) {
-	// TODO this really need to be handled at the router level
-	// w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	// contentType := strings.ToLower(r.Header.Get("Content-Type"))
-	// if !strings.Contains(contentType, "application/json") {
-	// 	w.WriteHeader(http.StatusBadRequest)
-	// 	w.Write(jsonMessage("Content-Type: application/json header required"))
-	// 	return
-	// }
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	if err := isContentTypeJSON(r); err != nil {
+		log.Error(err)
+		http.Error(w, string(jsonMessage(err.Error())), http.StatusBadRequest)
+		return
+	}
 	var annotations Annotations
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
@@ -62,35 +69,33 @@ func PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		msg := fmt.Sprintf("Error (%v) parsing annotation request %+v", err, r.Body)
 		log.Error(msg)
 		http.Error(w, string(jsonMessage(msg)), http.StatusBadRequest)
-		panic(err)
+		return
 	}
 	err = AnnotationsDriver.Create(uuid, annotations)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotation (%v)", err)
 		log.Error(msg)
 		http.Error(w, string(jsonMessage(msg)), http.StatusBadRequest)
-
+		return
 	}
-	// 	for _, annotation := range annotations {
-	//
-	// 		if annotation.ID != uuid {
-	// 			msg := fmt.Sprintf("Error processing annotation, uuid %s of document in body ....", uuid)
-	// 			w.Write(jsonMessage(msg))
-	// 			return
-	// 		}
-	// 	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(jsonMessage(fmt.Sprintf("Annotations for content %s created", uuid))))
+	return
 }
 
 // GetAnnotations is the public API
 func GetAnnotations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	if err := isContentTypeJSON(r); err != nil {
+		log.Error(err)
+		http.Error(w, string(jsonMessage(err.Error())), http.StatusBadRequest)
+	}
+
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
 
-	// TODO Query
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	if uuid == "" {
-		http.Error(w, `{"message":"uuid required"}`, http.StatusBadRequest)
+		http.Error(w, string(jsonMessage("uuid required")), http.StatusBadRequest)
 		return
 	}
 	annotations, found, err := AnnotationsDriver.Read(uuid)

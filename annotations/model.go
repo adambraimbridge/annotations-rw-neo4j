@@ -16,37 +16,54 @@ type Annotation struct {
 	OriginatingSystem string `json:"originatingSystem,omitempty"`
 }
 
+const (
+	mentionsPred     = "http://www.ft.com/ontology/annotation/mentions"
+	aboutPred        = "http://www.ft.com/ontology/annotation/about"
+	annotatedByPred  = "http://www.ft.com/ontology/annotation/isAnnotatedBy"
+	describesPred    = "http://www.ft.com/ontology/annotation/describes"
+	classifiedByPred = "http://www.ft.com/ontology/annotation/isClassifiedBy"
+	mentionsRel      = "MENTIONS"
+	aboutRel         = "ABOUT"
+	describesRel     = "DESCRIBES"
+	classifiedByRel  = "CLASSIFIED_BY"
+	annotatedByRel   = "ANNOTATED_BY"
+)
+
+var neoAnnotationRelationships = []string{
+	mentionsRel, aboutRel, describesRel, classifiedByRel, annotatedByRel,
+}
+
 var neoTypesToPredicate = map[string]string{
-	"MENTIONS":      "http://www.ft.com/ontology/annotation/mentions",
-	"ABOUT":         "http://www.ft.com/ontology/annotation/about",
-	"ANNOTATED_BY":  "http://www.ft.com/ontology/annotation/isAnnotatedBy",
-	"DESCRIBES":     "http://www.ft.com/ontology/annotation/describes",
-	"CLASSIFIED_BY": "http://www.ft.com/ontology/annotation/isClassifiedBy",
+	mentionsRel:     mentionsPred,
+	aboutRel:        aboutPred,
+	annotatedByRel:  annotatedByPred,
+	describesRel:    describesPred,
+	classifiedByRel: classifiedByPred,
 }
 
-var predicatesToNeoType = map[string]string{
-	"http://www.ft.com/ontology/annotation/mentions":       "MENTIONS",
-	"http://www.ft.com/ontology/annotation/about":          "ABOUT",
-	"http://www.ft.com/ontology/annotation/isAnnotatedBy":  "ANNOTATED_BY",
-	"http://www.ft.com/ontology/annotation/describes":      "DESCRIBES",
-	"http://www.ft.com/ontology/annotation/isClassifiedBy": "CLASSIFIED_BY",
+var predicatesToNeoRelationship = map[string]string{
+	mentionsPred:     mentionsRel,
+	aboutPred:        aboutRel,
+	annotatedByPred:  annotatedByRel,
+	describesPred:    describesRel,
+	classifiedByPred: classifiedByRel,
 }
 
-var requiredPredicates = []string{"ANNOTATED_BY"}
+var relationshipInheritance = map[string]string{
+	mentionsPred:  annotatedByPred,
+	aboutPred:     annotatedByPred,
+	describesPred: annotatedByPred,
+}
 
 func predicateToNeoType(predicate string) (neoType string) {
 	validatePredicate(predicate)
-	return predicatesToNeoType[predicate]
+	return predicatesToNeoRelationship[predicate]
 }
 
 func validatePredicate(predicate string) (err error) {
-	_, exists := predicatesToNeoType[predicate]
+	_, exists := predicatesToNeoRelationship[predicate]
 	if exists {
 		return nil
 	}
-	return fmt.Errorf("Annotation type URI %s is not one of the regognised ones %+v", predicate, predicatesToNeoType)
+	return fmt.Errorf("Annotation type URI %s is not one of the regognised ones %+v", predicate, predicatesToNeoRelationship)
 }
-
-const (
-	fsAuthority = "http://api.ft.com/system/FACTSET-PPL"
-)

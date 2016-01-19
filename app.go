@@ -43,6 +43,7 @@ func main() {
 		batchRunner := neocypherrunner.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
 		annotations.AnnotationsDriver = annotations.NewCypherDriver(batchRunner, db)
 		r := mux.NewRouter()
+		r.Headers("Content-type: application/json")
 
 		// Healthchecks and standards first
 		r.HandleFunc("/__health", v1a.Handler("PeopleReadWriteNeo4j Healthchecks",

@@ -7,7 +7,6 @@ import (
 	"github.com/Financial-Times/neo-utils-go"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
-	"time"
 )
 
 // Driver interface
@@ -43,16 +42,47 @@ func (driver CypherDriver) CheckConnectivity() (err error) {
 	return err
 }
 
-func annotationRelationship(predicate string) (statement string) {
+func createAnnotationRelationship(neoRelationship string) (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (concept:Thing{uuid:{conceptID}})
                 MERGE (content)-[pred:%s]->(concept)
                 SET pred={annProps}
                 `
-	statement = fmt.Sprintf(stmt, predicateToNeoType(predicate))
-	log.Debugln(statement)
+	statement = fmt.Sprintf(stmt, neoRelationship)
 	return statement
+}
+
+func createAnnotationQuery(contentUUID string, annotation Annotation) *neoism.CypherQuery {
+	query := neoism.CypherQuery{}
+	neoRelationship := predicateToNeoType(annotation.Predicate)
+	query.Statement = createAnnotationRelationship(neoRelationship)
+	query.Parameters = neoism.Props{
+		"contentID": contentUUID,
+		"conceptID": annotation.ID,
+		"annProps": neoism.Props{
+			"date":      annotation.AnnotatedDate,
+			"annotator": annotation.AnnotatedBy,
+			"system":    annotation.OriginatingSystem,
+		},
+	}
+	return &query
+}
+
+func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
+	matchStmtTemplate := "optional match (:Thing{uuid:{contentID}})-[r%d:%s]->(:Thing) \n"
+	deleteStmtTemplate := "delete r%d \n"
+	finalStmt := ""
+	for idx, annotationRel := range neoAnnotationRelationships {
+		finalStmt += fmt.Sprintf(matchStmtTemplate, idx, annotationRel)
+	}
+	for idx := range neoAnnotationRelationships {
+		finalStmt += fmt.Sprintf(deleteStmtTemplate, idx)
+	}
+	query := neoism.CypherQuery{}
+	query.Statement = finalStmt
+	query.Parameters = neoism.Props{"contentID": contentUUID}
+	return &query
 }
 
 //Create a set of annotations associated with a piece of content
@@ -60,40 +90,33 @@ func (driver CypherDriver) Create(contentUUID string, annotations Annotations) (
 	if contentUUID == "" {
 		return errors.New("Content uuid is required")
 	}
-	queries := []*neoism.CypherQuery{}
+	if err := validateAnnotations(&annotations); err != nil {
+		return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
+	}
+	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
 	for _, annotation := range annotations {
-		if err := validateAnnotation(&annotation); err != nil {
-			return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
+		queries = append(queries, createAnnotationQuery(contentUUID, annotation))
+		if inheritedPredicate, ok := relationshipInheritance[annotation.Predicate]; ok {
+			log.Debugf("Annotation predicate: %s inherits from %s", annotation.Predicate, inheritedPredicate)
+			annotation.Predicate = inheritedPredicate
+			queries = append(queries, createAnnotationQuery(contentUUID, annotation))
 		}
-		query := neoism.CypherQuery{}
-		query.Statement = annotationRelationship(annotation.Predicate)
-		query.Parameters = neoism.Props{
-			"contentID": contentUUID,
-			"conceptID": annotation.ID,
-			"annProps": neoism.Props{
-				"date":      annotation.AnnotatedDate,
-				"annotator": annotation.AnnotatedBy,
-				"system":    annotation.OriginatingSystem,
-			},
-		}
-		queries = append(queries, &query)
 	}
 	log.Debugf("Create Annotation for content uuid: %s query: %+v\n", contentUUID, queries)
 	return driver.cypherRunner.CypherBatch(queries)
 }
 
-func validateAnnotation(annotation *Annotation) error {
-	if annotation.Predicate == "" {
-		return fmt.Errorf("Predicate missing for annotation %+v", annotation)
-	}
-	if err := validatePredicate(annotation.Predicate); err != nil {
-		return err
-	}
-	if annotation.ID == "" {
-		return fmt.Errorf("Concept uuid missing for annotation %+v", annotation)
-	}
-	if annotation.AnnotatedDate == "" {
-		annotation.AnnotatedDate = time.Now().Format(time.RFC3339)
+func validateAnnotations(annotations *Annotations) error {
+	for _, annotation := range *annotations {
+		if annotation.Predicate == "" {
+			return fmt.Errorf("Predicate missing for annotation %+v", annotation)
+		}
+		if err := validatePredicate(annotation.Predicate); err != nil {
+			return err
+		}
+		if annotation.ID == "" {
+			return fmt.Errorf("Concept uuid missing for annotation %+v", annotation)
+		}
 	}
 	return nil
 }
