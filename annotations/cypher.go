@@ -7,6 +7,7 @@ import (
 	"github.com/Financial-Times/neo-utils-go"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
+	"time"
 )
 
 // Driver interface
@@ -42,27 +43,59 @@ func (driver CypherDriver) CheckConnectivity() (err error) {
 	return err
 }
 
-func annotationRelationship(predicate string, idx int) (statement string) {
-	stmt := `MERGE (content:Thing{uuid:contentID})-(%s:%s)->(concept:Thing{uuid:%d})`
-	statement = fmt.Sprintf(stmt, `aRel`+string(idx), predicateToNeoType(predicate), `conceptID`+string(idx))
-	statement = statement + "\n" + fmt.Sprintf(stmt, `aRel`+string(idx), `ANNOTATED_BY`, `conceptID`+string(idx))
+func annotationRelationship(predicate string) (statement string) {
+	stmt := `
+                MERGE (content:Thing{uuid:{contentID}})
+                MERGE (concept:Thing{uuid:{conceptID}})
+                MERGE (content)-[pred:%s]->(concept)
+                SET pred={annProps}
+                `
+	statement = fmt.Sprintf(stmt, predicateToNeoType(predicate))
+	log.Debugln(statement)
 	return statement
 }
 
 //Create a set of annotations associated with a piece of content
 func (driver CypherDriver) Create(contentUUID string, annotations Annotations) (err error) {
-	var statement string
-	params := neoism.Props{"contentID": contentUUID}
-	for idx, annotation := range annotations {
-		statement += annotationRelationship(annotation.Predicate, idx)
-		params[`conceptID`+string(idx)] = annotation.ID
+	if contentUUID == "" {
+		return errors.New("Content uuid is required")
 	}
-	query := &neoism.CypherQuery{
-		Statement:  statement,
-		Parameters: params,
+	queries := []*neoism.CypherQuery{}
+	for _, annotation := range annotations {
+		if err := validateAnnotation(&annotation); err != nil {
+			return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
+		}
+		query := neoism.CypherQuery{}
+		query.Statement = annotationRelationship(annotation.Predicate)
+		query.Parameters = neoism.Props{
+			"contentID": contentUUID,
+			"conceptID": annotation.ID,
+			"annProps": neoism.Props{
+				"date":      annotation.AnnotatedDate,
+				"annotator": annotation.AnnotatedBy,
+				"system":    annotation.OriginatingSystem,
+			},
+		}
+		queries = append(queries, &query)
 	}
-	log.Debugf("Create Annotation for content uuid: %s query: %+v", contentUUID, query)
-	return driver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	log.Debugf("Create Annotation for content uuid: %s query: %+v\n", contentUUID, queries)
+	return driver.cypherRunner.CypherBatch(queries)
+}
+
+func validateAnnotation(annotation *Annotation) error {
+	if annotation.Predicate == "" {
+		return fmt.Errorf("Predicate missing for annotation %+v", annotation)
+	}
+	if err := validatePredicate(annotation.Predicate); err != nil {
+		return err
+	}
+	if annotation.ID == "" {
+		return fmt.Errorf("Concept uuid missing for annotation %+v", annotation)
+	}
+	if annotation.AnnotatedDate == "" {
+		annotation.AnnotatedDate = time.Now().Format(time.RFC3339)
+	}
+	return nil
 }
 
 type neoChangeEvent struct {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go"
 	"github.com/Financial-Times/go-fthealth/v1a"
@@ -29,7 +30,7 @@ func main() {
 	graphiteTCPAddress := app.StringOpt("graphiteTCPAddress", "",
 		"Graphite TCP address, e.g. graphite.ft.com:2003. Leave as default if you do NOT want to output to graphite (e.g. if running locally)")
 	graphitePrefix := app.StringOpt("graphitePrefix", "",
-		"Prefix to use. Should start with content, include the environment, and the host name. e.g. content.test.people.rw.neo4j.ftaps58938-law1a-eu-t")
+		"Prefix to use. Should start with content, include the environment, and the host name. e.g. content.test.annotation.rw.neo4j.ftaps58938-law1a-eu-t")
 	logMetrics := app.BoolOpt("logMetrics", false, "Whether to log metrics. Set to true if running locally and you want metrics output")
 	logLevel := app.StringOpt("log-level", "INFO", "Logging level (DEBUG, INFO, WARN, ERROR)")
 
@@ -50,16 +51,16 @@ func main() {
 		r.HandleFunc("/__ping", annotations.Ping)
 
 		// Then API specific ones:
-		r.HandleFunc("/people/{uuid}", annotations.GetAnnotations).Methods("GET")
+		r.HandleFunc("/content/{uuid}/annotations", annotations.GetAnnotations).Methods("GET")
+		r.HandleFunc("/content/{uuid}/annotations", annotations.PutAnnotations).Methods("PUT")
 
-		if err := http.ListenAndServe(":"+string(*port),
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port),
 			httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
 				httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), r))); err != nil {
 			log.Fatalf("Unable to start server: %v", err)
 		}
-
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-		log.Infof("public-people-api will listen on port: %s, connecting to: %s", *port, *neoURL)
+		log.Infof("public-people-api will listen on port: %d, connecting to: %s\n", *port, *neoURL)
 	}
 	app.Run(os.Args)
 }

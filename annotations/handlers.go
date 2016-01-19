@@ -7,7 +7,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"net/http"
-	"strings"
+	//"strings"
 )
 
 // AnnotationsDriver for cypher queries
@@ -46,31 +46,39 @@ func jsonMessage(msgText string) []byte {
 // PutAnnotations handles the replacement of a set of annotations for a given bit of content
 func PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	// TODO this really need to be handled at the router level
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	contentType := strings.ToLower(r.Header.Get("Content-Type"))
-	if !strings.Contains(contentType, "application/json") {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(jsonMessage("Content-Type: application/json header required"))
-		return
-	}
+	// w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	// contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	// if !strings.Contains(contentType, "application/json") {
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// 	w.Write(jsonMessage("Content-Type: application/json header required"))
+	// 	return
+	// }
 	var annotations Annotations
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(annotations)
+	err := decoder.Decode(&annotations)
 	if err != nil {
-		msg := fmt.Sprintf("Error (%v) parsing message %+v\n", err, r.Body)
+		msg := fmt.Sprintf("Error (%v) parsing annotation request %+v", err, r.Body)
 		log.Error(msg)
 		http.Error(w, string(jsonMessage(msg)), http.StatusBadRequest)
-		return
+		panic(err)
 	}
-	for _, annotation := range annotations {
-		if annotation.ID != uuid {
-			msg := fmt.Sprintf("Error processing annotation, uuid %s of document in body ....", uuid)
-			w.Write(jsonMessage(msg))
-			return
-		}
+	err = AnnotationsDriver.Create(uuid, annotations)
+	if err != nil {
+		msg := fmt.Sprintf("Error creating annotation (%v)", err)
+		log.Error(msg)
+		http.Error(w, string(jsonMessage(msg)), http.StatusBadRequest)
+
 	}
+	// 	for _, annotation := range annotations {
+	//
+	// 		if annotation.ID != uuid {
+	// 			msg := fmt.Sprintf("Error processing annotation, uuid %s of document in body ....", uuid)
+	// 			w.Write(jsonMessage(msg))
+	// 			return
+	// 		}
+	// 	}
 }
 
 // GetAnnotations is the public API

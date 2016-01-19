@@ -7,14 +7,13 @@ import (
 //Annotations represents a collection of Annotation instances
 type Annotations []Annotation
 
-//Annotation is the main struct used to return results to the consumers of this api
-//Based on com.ft.annotations.mode.AnnotationReadResult in git.svc.ft.com/cp/annotations-api @ 29cab5224bcf5c219e23c5aa2f0446e6de5b4be4
+//Annotation is the main struct used to create and return structures
 type Annotation struct {
-	Predicate         string `json:"predicate"`
-	ID                string `json:"id"`
-	AnnotatedBy       string `json:"annotatedBy"`
-	AnnotatedDate     string `json:"annotatedDate"`
-	OriginatingSystem string `json:"originatingSystem"`
+	Predicate         string `json:"predicate,omitempty"`
+	ID                string `json:"id,omitempty"`
+	AnnotatedBy       string `json:"annotatedBy,omitempty"`
+	AnnotatedDate     string `json:"annotatedDate,omitempty"`
+	OriginatingSystem string `json:"originatingSystem,omitempty"`
 }
 
 var neoTypesToPredicate = map[string]string{
@@ -32,6 +31,8 @@ var predicatesToNeoType = map[string]string{
 	"http://www.ft.com/ontology/annotation/describes":      "DESCRIBES",
 	"http://www.ft.com/ontology/annotation/isClassifiedBy": "CLASSIFIED_BY",
 }
+
+var requiredPredicates = []string{"ANNOTATED_BY"}
 
 func predicateToNeoType(predicate string) (neoType string) {
 	validatePredicate(predicate)

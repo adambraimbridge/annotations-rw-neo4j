@@ -38,7 +38,13 @@ Based on the following google docs:
 
 ## TODO
 ### Things to resolve, check or otherwise investigate
-* Do we need to do the V1-V2 facade (Internal) request for GET requests ?
+* Handle DELETE
+* Handle GET
+* Properties on annotation
+  * annotatedDate - is this required, what Format, set as current date if missing, duplicate as long for sorting ?
+  * originatingSystem - required ?
+  * annotatedBy - required ?
+* Write an ANNOTATED_BY (aka isAnnotatedBy) relationship for all annotation relationships so we can count them ?
 
 ### API specific
 * Complete Test cases
@@ -47,8 +53,3 @@ Based on the following google docs:
 
 ### Cross cutting concerns
 * Allow service to start if neo4j is unavailable at startup time
-* Rework build / deploy (low priority)
-  * Suggested flow:
-    1. Build & Tests
-    1. Publish Release (using konstructor to generate vrm)
-    1. Deploy vrm/hash to test/prod
