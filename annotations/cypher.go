@@ -3,11 +3,17 @@ package annotations
 import (
 	"errors"
 	"fmt"
+	"time"
+
+	"regexp"
+
 	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-utils-go"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
 )
+
+var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
 
 // Driver interface
 type Driver interface {
@@ -42,45 +48,66 @@ func (driver CypherDriver) CheckConnectivity() (err error) {
 	return err
 }
 
-func createAnnotationRelationship(neoRelationship string) (statement string) {
+func createAnnotationRelationship() (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (concept:Thing{uuid:{conceptID}})
                 MERGE (content)-[pred:%s]->(concept)
                 SET pred={annProps}
                 `
-	statement = fmt.Sprintf(stmt, neoRelationship)
+	statement = fmt.Sprintf(stmt, mentionsRel)
 	return statement
 }
 
-func createAnnotationQuery(contentUUID string, annotation Annotation) *neoism.CypherQuery {
+//TODO should we create the Thing with a prefLabel and type if it doesn't exist? Since we know both.
+func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
-	neoRelationship := predicateToNeoType(annotation.Predicate)
-	query.Statement = createAnnotationRelationship(neoRelationship)
+	thingId, err := extractUuidFromUri(annotation.Thing.ID)
+	if err != nil {
+		return nil, err
+	}
+	annotatedDateEpoch, err := convertAnnotatedDateToEpoch(annotation.Provenances[0].AtTime)
+	if err != nil {
+		return nil, err
+	}
+	query.Statement = createAnnotationRelationship()
+	//TODO only set the annProps if they are provided
+	//TODO need to use the real ID not the supplied uri (i.e. extract the uuid)
 	query.Parameters = neoism.Props{
 		"contentID": contentUUID,
-		"conceptID": annotation.ID,
+		"conceptID": thingId,
 		"annProps": neoism.Props{
-			"date":      annotation.AnnotatedDate,
-			"annotator": annotation.AnnotatedBy,
-			"system":    annotation.OriginatingSystem,
+			"annotatedDate":      annotation.Provenances[0].AtTime,
+			"annotatedDateEpoch": annotatedDateEpoch,
 		},
 	}
-	return &query
+	return &query, nil
+}
+
+func extractUuidFromUri(uri string) (string, error) {
+	result := uuidExtractRegex.FindStringSubmatch(uri)
+	if len(result) == 2 {
+		return result[1], nil
+	}
+	return "", fmt.Errorf("Couldn't extract uuid from uri %s", uri)
+}
+
+func convertAnnotatedDateToEpoch(annotatedDateString string) (int64, error) {
+	datetimeEpoch, err := time.Parse(time.RFC3339, annotatedDateString)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return datetimeEpoch.Unix(), nil
 }
 
 func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
-	matchStmtTemplate := "optional match (:Thing{uuid:{contentID}})-[r%d:%s]->(:Thing) \n"
-	deleteStmtTemplate := "delete r%d \n"
-	finalStmt := ""
-	for idx, annotationRel := range neoAnnotationRelationships {
-		finalStmt += fmt.Sprintf(matchStmtTemplate, idx, annotationRel)
-	}
-	for idx := range neoAnnotationRelationships {
-		finalStmt += fmt.Sprintf(deleteStmtTemplate, idx)
-	}
+	matchStmtTemplate := `optional match (:Thing{uuid:{contentID}})-[r:%s]->(:Thing)
+                        delete r`
+
 	query := neoism.CypherQuery{}
-	query.Statement = finalStmt
+	query.Statement = fmt.Sprintf(matchStmtTemplate, mentionsRel)
 	query.Parameters = neoism.Props{"contentID": contentUUID}
 	return &query
 }
@@ -95,12 +122,11 @@ func (driver CypherDriver) Create(contentUUID string, annotations Annotations) (
 	}
 	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
 	for _, annotation := range annotations {
-		queries = append(queries, createAnnotationQuery(contentUUID, annotation))
-		if inheritedPredicate, ok := relationshipInheritance[annotation.Predicate]; ok {
-			log.Debugf("Annotation predicate: %s inherits from %s", annotation.Predicate, inheritedPredicate)
-			annotation.Predicate = inheritedPredicate
-			queries = append(queries, createAnnotationQuery(contentUUID, annotation))
+		query, err := createAnnotationQuery(contentUUID, annotation)
+		if err != nil {
+			return err
 		}
+		queries = append(queries, query)
 	}
 	log.Debugf("Create Annotation for content uuid: %s query: %+v\n", contentUUID, queries)
 	return driver.cypherRunner.CypherBatch(queries)
@@ -108,13 +134,7 @@ func (driver CypherDriver) Create(contentUUID string, annotations Annotations) (
 
 func validateAnnotations(annotations *Annotations) error {
 	for _, annotation := range *annotations {
-		if annotation.Predicate == "" {
-			return fmt.Errorf("Predicate missing for annotation %+v", annotation)
-		}
-		if err := validatePredicate(annotation.Predicate); err != nil {
-			return err
-		}
-		if annotation.ID == "" {
+		if annotation.Thing.ID == "" {
 			return fmt.Errorf("Concept uuid missing for annotation %+v", annotation)
 		}
 	}

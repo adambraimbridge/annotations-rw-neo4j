@@ -2,6 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"strings"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go"
 	"github.com/Financial-Times/go-fthealth/v1a"
@@ -13,10 +18,6 @@ import (
 	"github.com/jawher/mow.cli"
 	"github.com/jmcvetta/neoism"
 	"github.com/rcrowley/go-metrics"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
-	"strings"
 )
 
 func main() {
@@ -61,7 +62,7 @@ func main() {
 			log.Fatalf("Unable to start server: %v", err)
 		}
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-		log.Infof("public-people-api will listen on port: %d, connecting to: %s\n", *port, *neoURL)
+		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s\n", *port, *neoURL)
 	}
 	app.Run(os.Args)
 }

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/Financial-Times/go-fthealth/v1a"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
-	"net/http"
-	"strings"
 )
 
 // AnnotationsDriver for cypher queries
@@ -68,6 +69,7 @@ func PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		msg := fmt.Sprintf("Error (%v) parsing annotation request %+v", err, r.Body)
 		log.Error(msg)
+		//TDO - http.Error overwrites content type to text/html, can't use this approach
 		http.Error(w, string(jsonMessage(msg)), http.StatusBadRequest)
 		return
 	}
