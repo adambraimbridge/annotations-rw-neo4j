@@ -70,6 +70,8 @@ func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.C
 	if err != nil {
 		return nil, err
 	}
+	relevanceScore, confidenceScore, err := extractScores(annotation.Provenances[0].Scores)
+
 	query.Statement = createAnnotationRelationship()
 	//TODO only set the annProps if they are provided
 	//TODO need to use the real ID not the supplied uri (i.e. extract the uuid)
@@ -79,6 +81,8 @@ func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.C
 		"annProps": neoism.Props{
 			"annotatedDate":      annotation.Provenances[0].AtTime,
 			"annotatedDateEpoch": annotatedDateEpoch,
+			"relevanceScore":     relevanceScore,
+			"confidenceScore":    confidenceScore,
 		},
 	}
 	return &query, nil
@@ -100,6 +104,21 @@ func convertAnnotatedDateToEpoch(annotatedDateString string) (int64, error) {
 	}
 
 	return datetimeEpoch.Unix(), nil
+}
+
+func extractScores(scores []Score) (float64, float64, error) {
+	var relevanceScore, confidenceScore float64
+	for _, score := range scores {
+		scoringSystem := score.ScoringSystem
+		value := score.Value
+		switch scoringSystem {
+		case relevanceScoringSystem:
+			relevanceScore = value
+		case confidenceScoringSystem:
+			confidenceScore = value
+		}
+	}
+	return relevanceScore, confidenceScore, nil
 }
 
 func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
