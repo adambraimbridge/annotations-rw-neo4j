@@ -1,14 +1,30 @@
-package people
+package annotations
 
-type person struct {
-	BirthYear   int          `json:"birthYear,omitempty"`
-	Identifiers []identifier `json:"identifiers,omitempty"`
-	Name        string       `json:"name,omitempty"`
-	UUID        string       `json:"uuid"`
-	Salutation  string       `json:"salutation,omitempty"`
+//Annotations represents a collection of Annotation instances
+type Annotations []Annotation
+
+//Annotation is the main struct used to create and return structures
+type Annotation struct {
+	Provenances []struct {
+		AgentRole string  `json:"agentRole,omitempty"`
+		AtTime    string  `json:"atTime,omitempty"`
+		Scores    []Score `json:"scores,omitempty"`
+	} `json:"provenances,omitempty"`
+	Thing struct {
+		ID        string   `json:"id,omitempty"`
+		PrefLabel string   `json:"prefLabel,omitempty"`
+		Types     []string `json:"types,omitempty"`
+	} `json:"thing,omitempty"`
 }
 
-type identifier struct {
-	Authority       string `json:"authority"`
-	IdentifierValue string `json:"identifierValue"`
+type Score struct {
+	ScoringSystem string  `json:"scoringSystem,omitempty"`
+	Value         float64 `json:"value,omitempty"`
 }
+
+const (
+	mentionsPred            = "http://www.ft.com/ontology/annotation/mentions"
+	mentionsRel             = "MENTIONS"
+	relevanceScoringSystem  = "http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM"
+	confidenceScoringSystem = "http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM"
+)
