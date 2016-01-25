@@ -62,7 +62,11 @@ func createAnnotationRelationship() (statement string) {
 //TODO should we create the Thing with a prefLabel and type if it doesn't exist? Since we know both.
 func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
-	thingId, err := extractUuidFromUri(annotation.Thing.ID)
+	thingID, err := extractUUIDFromUri(annotation.Thing.ID)
+	if err != nil {
+		return nil, err
+	}
+	annotatedBy, err := extractUUIDFromUri(annotation.Provenances[0].AgentRole)
 	if err != nil {
 		return nil, err
 	}
@@ -77,18 +81,19 @@ func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.C
 	//TODO need to use the real ID not the supplied uri (i.e. extract the uuid)
 	query.Parameters = neoism.Props{
 		"contentID": contentUUID,
-		"conceptID": thingId,
+		"conceptID": thingID,
 		"annProps": neoism.Props{
 			"annotatedDate":      annotation.Provenances[0].AtTime,
 			"annotatedDateEpoch": annotatedDateEpoch,
 			"relevanceScore":     relevanceScore,
 			"confidenceScore":    confidenceScore,
+			"annotatedBy":        annotatedBy,
 		},
 	}
 	return &query, nil
 }
 
-func extractUuidFromUri(uri string) (string, error) {
+func extractUUIDFromUri(uri string) (string, error) {
 	result := uuidExtractRegex.FindStringSubmatch(uri)
 	if len(result) == 2 {
 		return result[1], nil
