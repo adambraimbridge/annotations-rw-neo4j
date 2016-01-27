@@ -8,6 +8,7 @@ import (
 	"regexp"
 
 	"github.com/Financial-Times/neo-cypher-runner-go"
+	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
@@ -18,8 +19,8 @@ var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 // Driver interface
 type Driver interface {
 	Read(contentUUID string) (annotations Annotations, found bool, err error)
-	//	Delete(contentUUID string, conceptUUID string) (err error)
-	Create(contentUUID string, annotations Annotations) (err error)
+	DeleteAll(contentUUID string) (found bool, err error)
+	Write(contentUUID string, annotations Annotations) (err error)
 	CheckConnectivity() (err error)
 }
 
@@ -59,26 +60,24 @@ func createAnnotationRelationship() (statement string) {
 	return statement
 }
 
-//TODO should we create the Thing with a prefLabel and type if it doesn't exist? Since we know both.
 func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
-	thingID, err := extractUUIDFromUri(annotation.Thing.ID)
+	thingID, err := extractUUIDFromURI(annotation.Thing.ID)
 	if err != nil {
 		return nil, err
 	}
-	annotatedBy, err := extractUUIDFromUri(annotation.Provenances[0].AgentRole)
-	if err != nil {
-		return nil, err
+
+	var provenance Provenance
+	var annotatedBy string
+	var annotatedDateEpoch int64
+	var confidenceScore, relevanceScore float64
+	if len(annotation.Provenances) > 0 {
+		provenance = annotation.Provenances[0]
+		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, err = extractDataFromProvenance(&provenance)
 	}
-	annotatedDateEpoch, err := convertAnnotatedDateToEpoch(annotation.Provenances[0].AtTime)
-	if err != nil {
-		return nil, err
-	}
-	relevanceScore, confidenceScore, err := extractScores(annotation.Provenances[0].Scores)
 
 	query.Statement = createAnnotationRelationship()
 	//TODO only set the annProps if they are provided
-	//TODO need to use the real ID not the supplied uri (i.e. extract the uuid)
 	query.Parameters = neoism.Props{
 		"contentID": contentUUID,
 		"conceptID": thingID,
@@ -93,7 +92,27 @@ func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.C
 	return &query, nil
 }
 
-func extractUUIDFromUri(uri string) (string, error) {
+func extractDataFromProvenance(provenance *Provenance) (string, int64, float64, float64, error) {
+	var annotatedBy string
+	var annotatedDateEpoch int64
+	var confidenceScore, relevanceScore float64
+	var err error
+	if provenance.AgentRole != "" {
+		annotatedBy, err = extractUUIDFromURI(provenance.AgentRole)
+	}
+	if provenance.AtTime != "" {
+		annotatedDateEpoch, err = convertAnnotatedDateToEpoch(provenance.AtTime)
+	}
+	if len(provenance.Scores) > 0 {
+		relevanceScore, confidenceScore, err = extractScores(provenance.Scores)
+	}
+	if err != nil {
+		return "", -1, -1, -1, err
+	}
+	return annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, nil
+}
+
+func extractUUIDFromURI(uri string) (string, error) {
 	result := uuidExtractRegex.FindStringSubmatch(uri)
 	if len(result) == 2 {
 		return result[1], nil
@@ -136,8 +155,9 @@ func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
 	return &query
 }
 
-//Create a set of annotations associated with a piece of content
-func (driver CypherDriver) Create(contentUUID string, annotations Annotations) (err error) {
+//Write a set of annotations associated with a piece of content. Any annotations
+//already there will be removed
+func (driver CypherDriver) Write(contentUUID string, annotations Annotations) (err error) {
 	if contentUUID == "" {
 		return errors.New("Content uuid is required")
 	}
@@ -157,6 +177,7 @@ func (driver CypherDriver) Create(contentUUID string, annotations Annotations) (
 }
 
 func validateAnnotations(annotations *Annotations) error {
+	//TODO - for consistency, we should probably just not create the annotation?
 	for _, annotation := range *annotations {
 		if annotation.Thing.ID == "" {
 			return fmt.Errorf("Concept uuid missing for annotation %+v", annotation)
@@ -165,52 +186,27 @@ func validateAnnotations(annotations *Annotations) error {
 	return nil
 }
 
-type neoChangeEvent struct {
-	StartedAt string
-	EndedAt   string
-}
-
-type neoReadStruct struct {
-	P struct {
-		ID        string
-		Types     []string
-		PrefLabel string
-		Labels    []string
-	}
-	M []struct {
-		M struct {
-			ID           string
-			Types        []string
-			PrefLabel    string
-			Title        string
-			ChangeEvents []neoChangeEvent
-		}
-		O struct {
-			ID        string
-			Types     []string
-			PrefLabel string
-			Labels    []string
-		}
-		R []struct {
-			ID           string
-			Types        []string
-			PrefLabel    string
-			ChangeEvents []neoChangeEvent
-		}
-	}
-}
-
 func (driver CypherDriver) Read(contentUUID string) (annotations Annotations, found bool, err error) {
 	results := []struct {
-		neoReadStruct
+		Annotations
 	}{}
+
+	statementTemplate := `
+					MATCH (c:Thing{uuid:{contentUUID}})-[m:MENTIONS]->(cc:Thing)
+					WITH c, cc, m, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc)} as t,
+					collect(
+						{scores:[
+							{scoringSystem:'%s', value:m.relevanceScore},
+							{scoringSystem:'%s', value:m.confidenceScore}],
+						agentRole:m.annotatedBy,
+						atTime:m.annotatedDate}) as p
+					RETURN [{thing:t, provenances: p}] as annotations
+									`
+	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
+
 	query := &neoism.CypherQuery{
-		Statement: `
-                        MATCH (content:Thing{uuid{:contentUUID}})-[rel]->(concept:Thing)
-                        WITH content, collect(type: labels(rel), concept:concept))
-                        RETURN collect(content.uuid annotations)
-                `,
-		Parameters: neoism.Props{"uuid": contentUUID},
+		Statement:  statement,
+		Parameters: neoism.Props{"contentUUID": contentUUID},
 		Result:     &results,
 	}
 	err = driver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -221,17 +217,47 @@ func (driver CypherDriver) Read(contentUUID string) (annotations Annotations, fo
 	log.Debugf("CypherResult Read Annotations for uuid: %s was: %+v", contentUUID, results)
 	if (len(results)) == 0 {
 		return Annotations{}, false, nil
-	} else if len(results) != 1 {
-		errMsg := fmt.Sprintf("Multiple people found with the same uuid:%s !", contentUUID)
-		log.Error(errMsg)
-		return Annotations{}, true, errors.New(errMsg)
 	}
-	annotations = neoReadStructToAnnotations(results[0].neoReadStruct)
+	annotations = results[0].Annotations
+	for idx := range annotations {
+		transformIDs(&annotations[idx])
+	}
+
 	log.Debugf("Returning %v", annotations)
 	return annotations, true, nil
 }
 
-func neoReadStructToAnnotations(neo neoReadStruct) (annotations Annotations) {
-	log.Debugf("neoReadStructToPerson neo: %+v result: %+v", neo, annotations)
-	return annotations
+func transformIDs(annotation *Annotation) {
+	annotation.Thing.ID = mapper.IDURL(annotation.Thing.ID)
+	for idx := range annotation.Provenances {
+		if annotation.Provenances[idx].AgentRole != "" {
+			annotation.Provenances[idx].AgentRole = mapper.IDURL(annotation.Provenances[idx].AgentRole)
+		}
+	}
+}
+
+//DeleteAll removes all the annotations for this content. Ignore the nodes on either end -
+//may leave nodes that are only 'things' inserted by this writer: clean up
+//as a result of this will need to happen externally if required
+func (driver CypherDriver) DeleteAll(contentUUID string) (bool, error) {
+
+	query := &neoism.CypherQuery{
+		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[m:MENTIONS]->(cc:Thing) DELETE m`,
+		Parameters:   neoism.Props{"contentUUID": contentUUID},
+		IncludeStats: true,
+	}
+
+	err := driver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+
+	stats, err := query.Stats()
+	if err != nil {
+		return false, err
+	}
+
+	var found bool
+	if stats.ContainsUpdates {
+		found = true
+	}
+
+	return found, err
 }

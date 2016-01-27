@@ -73,7 +73,7 @@ func PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, string(jsonMessage(msg)), http.StatusBadRequest)
 		return
 	}
-	err = AnnotationsDriver.Create(uuid, annotations)
+	err = AnnotationsDriver.Write(uuid, annotations)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotation (%v)", err)
 		log.Error(msg)

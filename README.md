@@ -28,6 +28,8 @@ See help text for other arguments._
 ### PUT
 /content/{annotatedContentId}/annotations
 
+Each annotation is added as a MENTIONS relationship between the content and a concept.
+
 This acts as a replace - all existing annotations are removed, and the new ones are created. This is because we get these
 annotations wholesale from the concept extraction service, which annotates the whole content on each publish.
 
@@ -47,7 +49,11 @@ Example:
 
     curl -XPUT -H "X-Request-Id: 123" -H "Content-Type: application/json" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations --data
     "@examplePutBody.json"
-    
+
+NB: Although provenances are supplied is a list, we don't expect to get more than one provenance: we will take the scores from that one
+and apply them to the MENTIONS relationship that we are creating for that annotation.  If there is no provenance, we'll still
+create a MENTIONS relationship, it just won't have score, agent and time properties.
+
 ### GET
 /content/{annotatedContentId}/annotations
 This internal read should return what got written (i.e., this isn't the public annotations read API)
