@@ -51,8 +51,10 @@ Example:
     "@examplePutBody.json"
 
 NB: Although provenances are supplied is a list, we don't expect to get more than one provenance: we will take the scores from that one
-and apply them to the MENTIONS relationship that we are creating for that annotation.  If there is no provenance, we'll still
-create a MENTIONS relationship, it just won't have score, agent and time properties.
+and apply them to the MENTIONS relationship that we are creating for that annotation.  
+
+If there is no provenance, or the provenance is incomplete (e.g. no agent role) we'll still
+create a MENTIONS relationship, it just won't have score, agent and time properties. 
 
 ### GET
 /content/{annotatedContentId}/annotations

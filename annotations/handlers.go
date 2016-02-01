@@ -28,6 +28,8 @@ func HealthCheck() v1a.Check {
 }
 
 // Checker does more stuff
+
+//TODO use the shared utility check
 func Checker() (string, error) {
 	err := AnnotationsDriver.CheckConnectivity()
 	if err == nil {

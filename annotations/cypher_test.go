@@ -1,6 +1,7 @@
 package annotations
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -12,18 +13,22 @@ import (
 var annotationsDriver CypherDriver
 
 const (
-	contentUUID    = "http://api.ft.com/things/32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID    = "http://api.ft.com/things/c834adfa-10c9-4748-8a21-c08537172706"
-	oldConceptUUID = "http://api.ft.com/things/ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	contentUUID    = "32b089d2-2aae-403d-be6e-877404f586cf"
+	conceptUUID    = "c834adfa-10c9-4748-8a21-c08537172706"
+	oldConceptUUID = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
 )
 
-func TestDeleteRemovesAnnotations(t *testing.T) {
+func getURI(uuid string) string {
+	return fmt.Sprintf("http://api.ft.com/things/%s", uuid)
+}
+
+func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert := assert.New(t)
 
 	annotationsDriver = getCypherDriver(t)
 
 	annotationsToDelete := Annotations{Annotation{
-		Thing: Thing{ID: conceptUUID,
+		Thing: Thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
 				"http://www.ft.com/ontology/organisation/Organisation",
@@ -53,13 +58,14 @@ func TestDeleteRemovesAnnotations(t *testing.T) {
 	assert.Equal(Annotations{}, annotations, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.False(found, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.NoError(err, "Error trying to find annotation for content %s", contentUUID)
-}
 
-func TestDeleteDoesNotRemoveExistingOrganisation(t *testing.T) {
+	checkNodeIsStillPresent(contentUUID, t)
+	checkNodeIsStillPresent(conceptUUID, t)
 
-}
-
-func TestDeleteDoesNotRemoveExistingContent(t *testing.T) {
+	err = deleteNode(annotationsDriver, contentUUID)
+	assert.NoError(err, "Error trying to delete content node with uuid %s", contentUUID)
+	err = deleteNode(annotationsDriver, conceptUUID)
+	assert.NoError(err, "Error trying to delete concept node with uuid %s", conceptUUID)
 
 }
 
@@ -69,7 +75,7 @@ func TestWriteAllValuesPresent(t *testing.T) {
 	annotationsDriver = getCypherDriver(t)
 
 	annotationsToWrite := Annotations{Annotation{
-		Thing: Thing{ID: conceptUUID,
+		Thing: Thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
 				"http://www.ft.com/ontology/organisation/Organisation",
@@ -92,31 +98,27 @@ func TestWriteAllValuesPresent(t *testing.T) {
 
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToWrite)
 
-	cleanUp(t, contentUUID)
+	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-func TestCreateNotAllValuesPresent(t *testing.T) {
+func TestWriteOnlyMandatoryValuesPresent(t *testing.T) {
 	assert := assert.New(t)
 
 	annotationsDriver = getCypherDriver(t)
 
 	annotationsToWrite := Annotations{Annotation{
-		Thing: Thing{ID: conceptUUID},
-		Provenances: []Provenance{
-			{
-				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
-				},
-			},
-		},
+		Thing: Thing{ID: getURI(conceptUUID)},
 	}}
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
 
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToWrite)
 
-	cleanUp(t, contentUUID)
+	cleanUp(t, contentUUID, []string{conceptUUID})
+}
+
+func TestWriteFailsForMoreThanOneProvenance(t *testing.T) {
+
 }
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
@@ -125,7 +127,7 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	annotationsDriver = getCypherDriver(t)
 
 	oldAnnotationsToWrite := Annotations{Annotation{
-		Thing: Thing{ID: oldConceptUUID,
+		Thing: Thing{ID: getURI(oldConceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
 				"http://www.ft.com/ontology/organisation/Organisation",
@@ -148,7 +150,7 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, oldAnnotationsToWrite)
 
 	updatedAnnotationsToWrite := Annotations{Annotation{
-		Thing: Thing{ID: conceptUUID,
+		Thing: Thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
 				"http://www.ft.com/ontology/organisation/Organisation",
@@ -170,7 +172,7 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	assert.NoError(annotationsDriver.Write(contentUUID, updatedAnnotationsToWrite), "Failed to write updated annotations")
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, updatedAnnotationsToWrite)
 
-	cleanUp(t, contentUUID)
+	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
 func TestConnectivityCheck(t *testing.T) {
@@ -207,9 +209,53 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 	assert.Equal(expectedAnnotation.Thing.ID, storedAnnotation.Thing.ID, "Thing ID not the same")
 }
 
-func cleanUp(t *testing.T, contentUUID string) {
+func checkNodeIsStillPresent(uuid string, t *testing.T) {
+	assert := assert.New(t)
+	annotationsDriver = getCypherDriver(t)
+	results := []struct {
+		UUID string `json:"uuid"`
+	}{}
+
+	query := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid:{uuid}}) return n.uuid
+		as uuid`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+		Result: &results,
+	}
+
+	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	assert.NoError(err, "UnexpectedError")
+	assert.True(len(results) == 1, "Didn't find a node")
+	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
+}
+
+func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 	assert := assert.New(t)
 	found, err := annotationsDriver.DeleteAll(contentUUID)
-	assert.True(found, "Didn't manage to delete annotations for content uuid %", contentUUID)
+	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
+
+	err = deleteNode(annotationsDriver, contentUUID)
+	assert.NoError(err, "Could not delete content node")
+	for _, conceptUUID := range conceptUUIDs {
+		err = deleteNode(annotationsDriver, conceptUUID)
+		assert.NoError(err, "Could not delete concept node")
+	}
+}
+
+func deleteNode(annotationsDriver CypherDriver, uuid string) error {
+
+	query := &neoism.CypherQuery{
+		Statement: `
+			MATCH (p:Thing {uuid: {uuid}})
+			DELETE p
+		`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+	}
+
+	return annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
 }
