@@ -42,19 +42,9 @@ func main() {
 			log.Fatalf("Error connecting to neo4j %s", err)
 		}
 		batchRunner := neocypherrunner.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
-		annotations.AnnotationsDriver = annotations.NewCypherDriver(batchRunner, db)
-		r := mux.NewRouter()
-		r.Headers("Content-type: application/json")
-
-		// Healthchecks and standards first
-		r.HandleFunc("/__health", v1a.Handler("PeopleReadWriteNeo4j Healthchecks",
-			"Checks for accessing neo4j", annotations.HealthCheck()))
-		r.HandleFunc("/ping", annotations.Ping)
-		r.HandleFunc("/__ping", annotations.Ping)
-
-		// Then API specific ones:
-		r.HandleFunc("/content/{uuid}/annotations", annotations.GetAnnotations).Methods("GET")
-		r.HandleFunc("/content/{uuid}/annotations", annotations.PutAnnotations).Methods("PUT")
+		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db)}
+		r := router(httpHandlers)
+		http.Handle("/", r)
 
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port),
 			httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
@@ -65,6 +55,24 @@ func main() {
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s\n", *port, *neoURL)
 	}
 	app.Run(os.Args)
+}
+
+func router(hh httpHandlers) *mux.Router {
+	r := mux.NewRouter()
+	r.Headers("Content-type: application/json")
+
+	// Healthchecks and standards first
+	r.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
+		"Checks for accessing neo4j", hh.HealthCheck()))
+	r.HandleFunc("/ping", Ping)
+	r.HandleFunc("/__ping", Ping)
+
+	// Then API specific ones:
+	r.HandleFunc("/content/{uuid}/annotations", hh.GetAnnotations).Methods("GET")
+	r.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
+	r.HandleFunc("/content/{uuid}/annotations", hh.DeleteAnnotations).Methods("DELETE")
+	r.HandleFunc("/content/annotations/__count", hh.CountAnnotations).Methods("GET")
+	return r
 }
 
 func setLogLevel(level string) {

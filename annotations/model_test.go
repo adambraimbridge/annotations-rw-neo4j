@@ -10,8 +10,8 @@ import (
 
 func TestUnMarshallingAnnotation(t *testing.T) {
 	assert := assert.New(t)
-	annotations := Annotations{}
-	jason, err := ioutil.ReadFile("../examplePutBody.json")
+	annotations := annotations{}
+	jason, err := ioutil.ReadFile("examplePutBody.json")
 	assert.NoError(err, "Unexpected error")
 
 	err = json.Unmarshal([]byte(jason), &annotations)

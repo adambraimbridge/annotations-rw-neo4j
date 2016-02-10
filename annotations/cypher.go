@@ -1,6 +1,7 @@
 package annotations
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -16,28 +17,41 @@ import (
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
 
-// Driver interface
-type Driver interface {
-	Read(contentUUID string) (annotations Annotations, found bool, err error)
-	DeleteAll(contentUUID string) (found bool, err error)
-	Write(contentUUID string, annotations Annotations) (err error)
-	CheckConnectivity() (err error)
+// Service interface. Compatible with the baserwftapp service EXCEPT for
+// 1) the Write function, which has signature Write(thing interface{}) error...
+// 2) the DecodeJson function, which has signature DecodeJSON(*json.Decoder) (thing interface{}, identity string, err error)
+// The problem is that we have a list of things, and the uuid is for a related OTHER thing
+// TODO - move to implement a shared defined Service interface?
+type Service interface {
+	Write(contentUUID string, thing interface{}) (err error)
+	Read(contentUUID string) (thing interface{}, found bool, err error)
+	Delete(contentUUID string) (found bool, err error)
+	Check() (err error)
+	DecodeJSON(*json.Decoder) (thing interface{}, err error)
+	Count() (int, error)
+	Initialise() error
 }
 
-// CypherDriver struct
-type CypherDriver struct {
+//holds the Neo4j-specific information
+type service struct {
 	cypherRunner neocypherrunner.CypherRunner
 	indexManager neoutils.IndexManager
 }
 
-//NewCypherDriver instantiate driver
-func NewCypherDriver(cypherRunner neocypherrunner.CypherRunner, indexManager neoutils.IndexManager) CypherDriver {
-	return CypherDriver{cypherRunner, indexManager}
+//NewAnnotationsService instantiate driver
+func NewAnnotationsService(cypherRunner neocypherrunner.CypherRunner, indexManager neoutils.IndexManager) service {
+	return service{cypherRunner, indexManager}
 }
 
-func (driver CypherDriver) Read(contentUUID string) (annotations Annotations, found bool, err error) {
+// DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
+func (s service) DecodeJSON(dec *json.Decoder) (thing interface{}, err error) {
+	a := annotations{}
+	return a, dec.Decode(&a)
+}
+
+func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
 	results := []struct {
-		Annotations
+		annotations
 	}{}
 
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
@@ -59,28 +73,28 @@ func (driver CypherDriver) Read(contentUUID string) (annotations Annotations, fo
 		Parameters: neoism.Props{"contentUUID": contentUUID},
 		Result:     &results,
 	}
-	err = driver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
 		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v\n", contentUUID, query.Statement, err)
-		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
+		return annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
 	log.Debugf("CypherResult Read Annotations for uuid: %s was: %+v", contentUUID, results)
 	if (len(results)) == 0 {
-		return Annotations{}, false, nil
+		return annotations{}, false, nil
 	}
-	annotations = results[0].Annotations
-	for idx := range annotations {
-		mapToResponseFormat(&annotations[idx])
+	foundAnnotations := results[0].annotations
+	for idx := range foundAnnotations {
+		mapToResponseFormat(&foundAnnotations[idx])
 	}
 
-	log.Debugf("Returning %v", annotations)
-	return annotations, true, nil
+	log.Debugf("Returning %v", foundAnnotations)
+	return foundAnnotations, true, nil
 }
 
-//DeleteAll removes all the annotations for this content. Ignore the nodes on either end -
+//Delete removes all the annotations for this content. Ignore the nodes on either end -
 //may leave nodes that are only 'things' inserted by this writer: clean up
 //as a result of this will need to happen externally if required
-func (driver CypherDriver) DeleteAll(contentUUID string) (bool, error) {
+func (s service) Delete(contentUUID string) (bool, error) {
 
 	query := &neoism.CypherQuery{
 		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[m:MENTIONS]->(cc:Thing) DELETE m`,
@@ -88,7 +102,7 @@ func (driver CypherDriver) DeleteAll(contentUUID string) (bool, error) {
 		IncludeStats: true,
 	}
 
-	err := driver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
 
 	stats, err := query.Stats()
 	if err != nil {
@@ -105,37 +119,54 @@ func (driver CypherDriver) DeleteAll(contentUUID string) (bool, error) {
 
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
-func (driver CypherDriver) Write(contentUUID string, annotations Annotations) (err error) {
+func (s service) Write(contentUUID string, thing interface{}) (err error) {
+	annotationsToWrite := thing.(annotations)
+
 	if contentUUID == "" {
 		return errors.New("Content uuid is required")
 	}
-	if err := validateAnnotations(&annotations); err != nil {
+	if err := validateAnnotations(&annotationsToWrite); err != nil {
 		return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
 	}
 	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
-	for _, annotation := range annotations {
-		query, err := createAnnotationQuery(contentUUID, annotation)
+	for _, annotationToWrite := range annotationsToWrite {
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite)
 		if err != nil {
 			return err
 		}
 		queries = append(queries, query)
 	}
-	log.Debugf("Create Annotation for content uuid: %s query: %+v\n", contentUUID, queries)
-	return driver.cypherRunner.CypherBatch(queries)
+	log.Infof("Create Annotation for content uuid: %s query: %+v\n", contentUUID, queries)
+	return s.cypherRunner.CypherBatch(queries)
 }
 
-// CheckConnectivity tests neo4j by running a simple cypher query
-func (driver CypherDriver) CheckConnectivity() (err error) {
+// Check tests neo4j by running a simple cypher query
+//TODO replace with library version
+func (s service) Check() error {
+	return neoutils.Check(s.cypherRunner)
+}
+
+func (s service) Count() (int, error) {
 	results := []struct {
-		ID int
+		Count int `json:"c"`
 	}{}
+
 	query := &neoism.CypherQuery{
-		Statement: "MATCH (x) RETURN ID(x) LIMIT 1",
+		Statement: `MATCH ()-[r:MENTIONS]->() RETURN count(r) as c`,
 		Result:    &results,
 	}
-	err = driver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
-	log.Debugf("CheckConnectivity results:%+v  err: %+v", results, err)
-	return err
+
+	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return results[0].Count, nil
+}
+
+func (s service) Initialise() error {
+	return nil // No constraints need to be set up TODO - check, should we index relationships?
 }
 
 func createAnnotationRelationship() (statement string) {
@@ -149,22 +180,22 @@ func createAnnotationRelationship() (statement string) {
 	return statement
 }
 
-func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.CypherQuery, error) {
+func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
-	thingID, err := extractUUIDFromURI(annotation.Thing.ID)
+	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(annotation.Provenances) > 1 {
+	if len(ann.Provenances) > 1 {
 		return nil, errors.New("Cannot insert a MENTIONS annotation with multiple provenances")
 	}
 
-	var provenance Provenance
+	var prov provenance
 	params := map[string]interface{}{}
-	if len(annotation.Provenances) == 1 {
-		provenance = annotation.Provenances[0]
-		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&provenance)
+	if len(ann.Provenances) == 1 {
+		prov = ann.Provenances[0]
+		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&prov)
 
 		if err != nil {
 			return nil, err
@@ -175,7 +206,7 @@ func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.C
 			params["annotatedDateEpoch"] = annotatedDateEpoch
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
-			params["annotatedDate"] = provenance.AtTime
+			params["annotatedDate"] = prov.AtTime
 		}
 
 	}
@@ -189,17 +220,17 @@ func createAnnotationQuery(contentUUID string, annotation Annotation) (*neoism.C
 	return &query, nil
 }
 
-func extractDataFromProvenance(provenance *Provenance) (string, int64, float64, float64, bool, error) {
-	if provenance.AgentRole == "" || provenance.AtTime == "" || len(provenance.Scores) == 0 {
+func extractDataFromProvenance(prov *provenance) (string, int64, float64, float64, bool, error) {
+	if prov.AgentRole == "" || prov.AtTime == "" || len(prov.Scores) == 0 {
 		return "", -1, -1, -1, false, nil
 	}
 	var annotatedBy string
 	var annotatedDateEpoch int64
 	var confidenceScore, relevanceScore float64
 	var err error
-	annotatedBy, err = extractUUIDFromURI(provenance.AgentRole)
-	annotatedDateEpoch, err = convertAnnotatedDateToEpoch(provenance.AtTime)
-	relevanceScore, confidenceScore, err = extractScores(provenance.Scores)
+	annotatedBy, err = extractUUIDFromURI(prov.AgentRole)
+	annotatedDateEpoch, err = convertAnnotatedDateToEpoch(prov.AtTime)
+	relevanceScore, confidenceScore, err = extractScores(prov.Scores)
 
 	if err != nil {
 		return "", -1, -1, -1, true, err
@@ -225,7 +256,7 @@ func convertAnnotatedDateToEpoch(annotatedDateString string) (int64, error) {
 	return datetimeEpoch.Unix(), nil
 }
 
-func extractScores(scores []Score) (float64, float64, error) {
+func extractScores(scores []score) (float64, float64, error) {
 	var relevanceScore, confidenceScore float64
 	for _, score := range scores {
 		scoringSystem := score.ScoringSystem
@@ -250,7 +281,7 @@ func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
 	return &query
 }
 
-func validateAnnotations(annotations *Annotations) error {
+func validateAnnotations(annotations *annotations) error {
 	//TODO - for consistency, we should probably just not create the annotation?
 	for _, annotation := range *annotations {
 		if annotation.Thing.ID == "" {
@@ -260,17 +291,17 @@ func validateAnnotations(annotations *Annotations) error {
 	return nil
 }
 
-func mapToResponseFormat(annotation *Annotation) {
-	annotation.Thing.ID = mapper.IDURL(annotation.Thing.ID)
+func mapToResponseFormat(ann *annotation) {
+	ann.Thing.ID = mapper.IDURL(ann.Thing.ID)
 	// We expect only ONE provenance
 	var provenanceValid bool
-	for idx := range annotation.Provenances {
-		if annotation.Provenances[idx].AgentRole != "" {
-			annotation.Provenances[idx].AgentRole = mapper.IDURL(annotation.Provenances[idx].AgentRole)
+	for idx := range ann.Provenances {
+		if ann.Provenances[idx].AgentRole != "" {
+			ann.Provenances[idx].AgentRole = mapper.IDURL(ann.Provenances[idx].AgentRole)
 			provenanceValid = true
 		}
 	}
 	if provenanceValid != true {
-		annotation.Provenances = nil
+		ann.Provenances = nil
 	}
 }

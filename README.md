@@ -21,7 +21,6 @@ _All arguments are optional.
 --port defaults to 8080.
 --log-level defaults to INFO
 See help text for other arguments._
-* curl http://localhost:8080/annotations/{content_uuid} | json_pp
 
 ## Endpoints
 
@@ -48,13 +47,13 @@ See [this doc](https://docs.google.com/document/d/1FE-JZDYJlKsxOIuQQkPwyyzcOkJQn
 Example:
 
     curl -XPUT -H "X-Request-Id: 123" -H "Content-Type: application/json" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations --data
-    "@examplePutBody.json"
+    "@annotations/examplePutBody.json"
 
 NB: Although provenances are supplied is a list, we don't expect to get more than one provenance: we will take the scores from that one
 and apply them to the MENTIONS relationship that we are creating for that annotation.  
 
 If there is no provenance, or the provenance is incomplete (e.g. no agent role) we'll still
-create a MENTIONS relationship, it just won't have score, agent and time properties. 
+create a MENTIONS relationship, it just won't have score, agent and time properties.
 
 ### GET
 /content/{annotatedContentId}/annotations
@@ -86,17 +85,8 @@ See [this doc](https://docs.google.com/document/d/1cySUlTuSYlv8ANikLlfToezSiRERa
 * Ping: [http://localhost:8080/__ping](http://localhost:8080/__ping)
 
 ## TODO
-### Things to resolve, check or otherwise investigate
-* Handle DELETE
-* Handle GET
-* Properties on annotation
-  * annotatedDate - is this required, what Format, set as current date if missing, duplicate as long for sorting ?
-  * originatingSystem - required ?
-  * annotatedBy - required ?
-* Write an ANNOTATED_BY (aka isAnnotatedBy) relationship for all annotation relationships so we can count them ?
 
 ### API specific
-* Complete Test cases
 * Runbook
 * Update or new API documentation based on original google docs
 

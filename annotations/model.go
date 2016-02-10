@@ -1,30 +1,30 @@
 package annotations
 
 //Annotations represents a collection of Annotation instances
-type Annotations []Annotation
+type annotations []annotation
 
 //Annotation is the main struct used to create and return structures
-type Annotation struct {
-	Thing       Thing        `json:"thing,omitempty"`
-	Provenances []Provenance `json:"provenances,omitempty"`
+type annotation struct {
+	Thing       thing        `json:"thing,omitempty"`
+	Provenances []provenance `json:"provenances,omitempty"`
 }
 
 //Thing represents a concept being linked to
-type Thing struct {
+type thing struct {
 	ID        string   `json:"id,omitempty"`
 	PrefLabel string   `json:"prefLabel,omitempty"`
 	Types     []string `json:"types,omitempty"`
 }
 
 //Provenance indicates the scores and where they came from
-type Provenance struct {
-	Scores    []Score `json:"scores,omitempty"`
+type provenance struct {
+	Scores    []score `json:"scores,omitempty"`
 	AgentRole string  `json:"agentRole,omitempty"`
 	AtTime    string  `json:"atTime,omitempty"`
 }
 
 //Score represents one of our scores for the annotation
-type Score struct {
+type score struct {
 	ScoringSystem string  `json:"scoringSystem,omitempty"`
 	Value         float64 `json:"value,omitempty"`
 }
