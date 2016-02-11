@@ -21,12 +21,11 @@ import (
 )
 
 func main() {
-	log.SetLevel(log.InfoLevel)
 	log.Infof("Application started with args %s", os.Args)
-
-	app := cli.App("people-rw-neo4j", "A RESTful API for managing People in neo4j")
+	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotationse in neo4j")
 	neoURL := app.StringOpt("neo-url", "http://localhost:7474/db/data", "neo4j endpoint URL")
 	port := app.IntOpt("port", 8080, "Port to listen on")
+	env := app.StringOpt("env", "local", "environment this app is running in")
 	batchSize := app.IntOpt("batchSize", 1024, "Maximum number of statements to execute per batch")
 	graphiteTCPAddress := app.StringOpt("graphiteTCPAddress", "",
 		"Graphite TCP address, e.g. graphite.ft.com:2003. Leave as default if you do NOT want to output to graphite (e.g. if running locally)")
@@ -36,10 +35,22 @@ func main() {
 	logLevel := app.StringOpt("log-level", "INFO", "Logging level (DEBUG, INFO, WARN, ERROR)")
 
 	app.Action = func() {
-		setLogLevel(strings.ToUpper(*logLevel))
+
 		db, err := neoism.Connect(*neoURL)
 		if err != nil {
 			log.Fatalf("Error connecting to neo4j %s", err)
+		}
+
+		if *env != "local" {
+			f, err := os.OpenFile("/var/log/apps/annotations-rw-neo4j-go-app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
+			if err == nil {
+				log.SetOutput(f)
+				log.SetFormatter(&log.TextFormatter{})
+			} else {
+				log.Fatalf("Failed to initialise log file, %v", err)
+			}
+
+			defer f.Close()
 		}
 		batchRunner := neocypherrunner.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
 		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db)}
@@ -52,8 +63,10 @@ func main() {
 			log.Fatalf("Unable to start server: %v", err)
 		}
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s\n", *port, *neoURL)
+
 	}
+	setLogLevel(strings.ToUpper(*logLevel))
+	log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s\n", *port, *neoURL)
 	app.Run(os.Args)
 }
 

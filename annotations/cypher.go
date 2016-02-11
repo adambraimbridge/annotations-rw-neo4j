@@ -131,6 +131,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 	}
 	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
 	//TODO - if there are no annotations to write, info log that.
+
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite)
 		if err != nil {
@@ -140,6 +141,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 	}
 	//TODO log something useful here for the queries
 	log.Infof("Creating Annotations for content uuid: %s queries: %+v\n", contentUUID, queries)
+
 	return s.cypherRunner.CypherBatch(queries)
 }
 
@@ -190,13 +192,14 @@ func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQu
 		return nil, err
 	}
 
-	if len(ann.Provenances) > 1 {
+	//todo temporary chnage to deal with multiple provenances
+	/*if len(ann.Provenances) > 1 {
 		return nil, errors.New("Cannot insert a MENTIONS annotation with multiple provenances")
-	}
+	}*/
 
 	var prov provenance
 	params := map[string]interface{}{}
-	if len(ann.Provenances) == 1 {
+	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
 		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&prov)
 
@@ -211,8 +214,8 @@ func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQu
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
 			params["annotatedDate"] = prov.AtTime
+			params["platformVersion"] = "v2"
 		}
-
 	}
 
 	query.Statement = createAnnotationRelationship()
