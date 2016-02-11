@@ -44,9 +44,10 @@ func NewAnnotationsService(cypherRunner neocypherrunner.CypherRunner, indexManag
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
-func (s service) DecodeJSON(dec *json.Decoder) (thing interface{}, err error) {
+func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 	a := annotations{}
-	return a, dec.Decode(&a)
+	err := dec.Decode(&a)
+	return a, err
 }
 
 func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
@@ -129,6 +130,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
 	}
 	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
+	//TODO - if there are no annotations to write, info log that.
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite)
 		if err != nil {
@@ -136,7 +138,8 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		}
 		queries = append(queries, query)
 	}
-	log.Infof("Create Annotation for content uuid: %s query: %+v\n", contentUUID, queries)
+	//TODO log something useful here for the queries
+	log.Infof("Creating Annotations for content uuid: %s queries: %+v\n", contentUUID, queries)
 	return s.cypherRunner.CypherBatch(queries)
 }
 
@@ -198,6 +201,7 @@ func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQu
 		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&prov)
 
 		if err != nil {
+			log.Infof("ERROR=%s", err)
 			return nil, err
 		}
 
