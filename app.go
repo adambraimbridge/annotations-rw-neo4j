@@ -22,7 +22,7 @@ import (
 
 func main() {
 	log.Infof("Application started with args %s", os.Args)
-	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotationse in neo4j")
+	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.StringOpt("neo-url", "http://localhost:7474/db/data", "neo4j endpoint URL")
 	port := app.IntOpt("port", 8080, "Port to listen on")
 	env := app.StringOpt("env", "local", "environment this app is running in")
@@ -35,6 +35,7 @@ func main() {
 	logLevel := app.StringOpt("log-level", "INFO", "Logging level (DEBUG, INFO, WARN, ERROR)")
 
 	app.Action = func() {
+		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
 
 		db, err := neoism.Connect(*neoURL)
 		if err != nil {
@@ -66,7 +67,6 @@ func main() {
 
 	}
 	setLogLevel(strings.ToUpper(*logLevel))
-	log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s\n", *port, *neoURL)
 	app.Run(os.Args)
 }
 

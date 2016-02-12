@@ -76,7 +76,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 	}
 	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
-		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v\n", contentUUID, query.Statement, err)
+		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v", contentUUID, query.Statement, err)
 		return annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
 	log.Debugf("CypherResult Read Annotations for uuid: %s was: %+v", contentUUID, results)
@@ -129,24 +129,29 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
 		return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
 	}
-	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
-	//TODO - if there are no annotations to write, info log that.
 
+	if len(annotationsToWrite) == 0 {
+		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
+	}
+
+	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
+
+	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite)
 		if err != nil {
 			return err
 		}
+		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
-	//TODO log something useful here for the queries
-	log.Infof("Creating Annotations for content uuid: %s queries: %+v\n", contentUUID, queries)
+	log.Infof("Updated Annotations for content uuid: %s", contentUUID)
+	log.Debugf("For update, ran statements: %+v", statements)
 
 	return s.cypherRunner.CypherBatch(queries)
 }
 
 // Check tests neo4j by running a simple cypher query
-//TODO replace with library version
 func (s service) Check() error {
 	return neoutils.Check(s.cypherRunner)
 }
@@ -171,7 +176,7 @@ func (s service) Count() (int, error) {
 }
 
 func (s service) Initialise() error {
-	return nil // No constraints need to be set up TODO - check, should we index relationships?
+	return nil // No constraints need to be set up
 }
 
 func createAnnotationRelationship() (statement string) {
