@@ -10,7 +10,7 @@ import (
 
 	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
-	"github.com/Financial-Times/neo-utils-go"
+	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
 )
