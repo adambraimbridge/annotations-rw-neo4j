@@ -8,7 +8,6 @@ import (
 
 	"regexp"
 
-	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
@@ -34,12 +33,12 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	cypherRunner neocypherrunner.CypherRunner
+	cypherRunner neoutils.CypherRunner
 	indexManager neoutils.IndexManager
 }
 
 //NewAnnotationsService instantiate driver
-func NewAnnotationsService(cypherRunner neocypherrunner.CypherRunner, indexManager neoutils.IndexManager) service {
+func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager) service {
 	return service{cypherRunner, indexManager}
 }
 

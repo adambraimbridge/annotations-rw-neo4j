@@ -11,7 +11,6 @@ import (
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
-	"github.com/Financial-Times/neo-cypher-runner-go"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -53,7 +52,7 @@ func main() {
 
 			defer f.Close()
 		}
-		batchRunner := neocypherrunner.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
+		batchRunner := neoutils.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
 		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db)}
 		r := router(httpHandlers)
 		http.Handle("/", r)
