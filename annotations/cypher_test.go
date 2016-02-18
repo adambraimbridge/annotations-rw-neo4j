@@ -13,9 +13,10 @@ import (
 var annotationsDriver service
 
 const (
-	contentUUID    = "32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID    = "c834adfa-10c9-4748-8a21-c08537172706"
-	oldConceptUUID = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	contentUUID       = "32b089d2-2aae-403d-be6e-877404f586cf"
+	conceptUUID       = "25364312-ea32-3aa9-b3d6-4d2cde11eddd"
+	secondConceptUUID = "c834adfa-10c9-4748-8a21-c08537172706"
+	oldConceptUUID    = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
 )
 
 func getURI(uuid string) string {
@@ -101,6 +102,56 @@ func TestWriteAllValuesPresent(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
+func TestWriteAndReadMultipleAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	annotationsDriver = getAnnotationsService(t)
+
+	annotationsToWrite := annotations{annotation{
+		Thing: thing{ID: getURI(conceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}, annotation{
+		Thing: thing{ID: getURI(secondConceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.4},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.5},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}}
+
+	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToWrite)
+
+	cleanUp(t, contentUUID, []string{conceptUUID})
+}
+
 func TestWriteOnlyMandatoryValuesPresent(t *testing.T) {
 	assert := assert.New(t)
 
@@ -115,10 +166,6 @@ func TestWriteOnlyMandatoryValuesPresent(t *testing.T) {
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToWrite)
 
 	cleanUp(t, contentUUID, []string{conceptUUID})
-}
-
-func TestWriteFailsForMoreThanOneProvenance(t *testing.T) {
-
 }
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
@@ -197,17 +244,19 @@ func getAnnotationsService(t *testing.T) service {
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {
 	assert := assert.New(t)
 	storedThings, found, err := annotationsDriver.Read(contentUUID)
-	storedAnnotations := storedThings.(annotations)
+	storedAnnotations := storedThings.([]annotation)
 
 	assert.NoError(err, "Error finding annotations for contentUUID %s", contentUUID)
 	assert.True(found, "Didn't find annotations for contentUUID %s", contentUUID)
-	expectedAnnotation := expectedAnnotations[0]
-	storedAnnotation := storedAnnotations[0]
-	assert.EqualValues(expectedAnnotation.Provenances, storedAnnotation.Provenances, "Provenances not the same")
+	assert.Equal(len(expectedAnnotations), len(storedAnnotations), "Didn't get the same number of annotations")
+	for idx, expectedAnnotation := range expectedAnnotations {
+		storedAnnotation := storedAnnotations[idx]
+		assert.EqualValues(expectedAnnotation.Provenances, storedAnnotation.Provenances, "Provenances not the same")
 
-	// In annotations write, we don't store anything other than ID for the concept (so type will only be 'Thing' and pref label will not
-	// be present UNLESS the concept has been written by some other system)
-	assert.Equal(expectedAnnotation.Thing.ID, storedAnnotation.Thing.ID, "Thing ID not the same")
+		// In annotations write, we don't store anything other than ID for the concept (so type will only be 'Thing' and pref label will not
+		// be present UNLESS the concept has been written by some other system)
+		assert.Equal(expectedAnnotation.Thing.ID, storedAnnotation.Thing.ID, "Thing ID not the same")
+	}
 }
 
 func checkNodeIsStillPresent(uuid string, t *testing.T) {

@@ -50,21 +50,19 @@ func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 }
 
 func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
-	results := []struct {
-		annotations
-	}{}
+	results := []annotation{}
 
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
 					MATCH (c:Thing{uuid:{contentUUID}})-[m:MENTIONS]->(cc:Thing)
-					WITH c, cc, m, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc)} as t,
+					WITH c, cc, m, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc)} as thing,
 					collect(
 						{scores:[
 							{scoringSystem:'%s', value:m.relevanceScore},
 							{scoringSystem:'%s', value:m.confidenceScore}],
 						agentRole:m.annotatedBy,
-						atTime:m.annotatedDate}) as p
-					RETURN [{thing:t, provenances: p}] as annotations
+						atTime:m.annotatedDate}) as provenances
+					RETURN thing, provenances ORDER BY thing.id
 									`
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
@@ -82,13 +80,12 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 	if (len(results)) == 0 {
 		return annotations{}, false, nil
 	}
-	foundAnnotations := results[0].annotations
-	for idx := range foundAnnotations {
-		mapToResponseFormat(&foundAnnotations[idx])
+
+	for idx := range results {
+		mapToResponseFormat(&results[idx])
 	}
 
-	log.Debugf("Returning %v", foundAnnotations)
-	return foundAnnotations, true, nil
+	return results, true, nil
 }
 
 //Delete removes all the annotations for this content. Ignore the nodes on either end -
