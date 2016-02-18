@@ -33,13 +33,14 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	cypherRunner neoutils.CypherRunner
-	indexManager neoutils.IndexManager
+	cypherRunner    neoutils.CypherRunner
+	indexManager    neoutils.IndexManager
+	platformVersion string
 }
 
 //NewAnnotationsService instantiate driver
-func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager) service {
-	return service{cypherRunner, indexManager}
+func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager, platformVersion string) service {
+	return service{cypherRunner, indexManager, platformVersion}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
@@ -134,7 +135,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
-		query, err := createAnnotationQuery(contentUUID, annotationToWrite)
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion)
 		if err != nil {
 			return err
 		}
@@ -186,7 +187,7 @@ func createAnnotationRelationship() (statement string) {
 	return statement
 }
 
-func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQuery, error) {
+func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
 	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
@@ -215,7 +216,9 @@ func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQu
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
 			params["annotatedDate"] = prov.AtTime
-			params["platformVersion"] = "v2"
+			if (platformVersion != "") {
+				params["platformVersion"] = platformVersion
+			}
 		}
 	}
 

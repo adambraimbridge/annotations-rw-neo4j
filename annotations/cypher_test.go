@@ -17,6 +17,7 @@ const (
 	conceptUUID       = "25364312-ea32-3aa9-b3d6-4d2cde11eddd"
 	secondConceptUUID = "c834adfa-10c9-4748-8a21-c08537172706"
 	oldConceptUUID    = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	platformVersion   = "v2"
 )
 
 func getURI(uuid string) string {
@@ -238,7 +239,7 @@ func getAnnotationsService(t *testing.T) service {
 
 	db, err := neoism.Connect(url)
 	assert.NoError(err, "Failed to connect to Neo4j")
-	return NewAnnotationsService(neoutils.StringerDb{db}, db)
+	return NewAnnotationsService(neoutils.StringerDb{db}, db, platformVersion)
 }
 
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {

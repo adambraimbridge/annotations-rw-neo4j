@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"./annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
@@ -32,6 +32,11 @@ func main() {
 		"Prefix to use. Should start with content, include the environment, and the host name. e.g. content.test.annotation.rw.neo4j.ftaps58938-law1a-eu-t")
 	logMetrics := app.BoolOpt("logMetrics", false, "Whether to log metrics. Set to true if running locally and you want metrics output")
 	logLevel := app.StringOpt("log-level", "INFO", "Logging level (DEBUG, INFO, WARN, ERROR)")
+	platformVersion := app.StringOpt("platformVersion", "", "Annotation source platform. Possible values are: v1 or v2.")
+
+	if (*platformVersion=="") {
+		log.Errorf("PlatformVersion was not specified!")
+	}
 
 	app.Action = func() {
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
@@ -53,7 +58,7 @@ func main() {
 			defer f.Close()
 		}
 		batchRunner := neoutils.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
-		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db)}
+		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db, *platformVersion)}
 		r := router(httpHandlers)
 		http.Handle("/", r)
 
