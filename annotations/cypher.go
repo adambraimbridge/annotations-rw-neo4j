@@ -40,6 +40,9 @@ type service struct {
 
 //NewAnnotationsService instantiate driver
 func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager, platformVersion string) service {
+	if (platformVersion=="") {
+		log.Fatalf("PlatformVersion was not specified!")
+	}
 	return service{cypherRunner, indexManager, platformVersion}
 }
 
@@ -216,9 +219,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
 			params["annotatedDate"] = prov.AtTime
-			if (platformVersion != "") {
-				params["platformVersion"] = platformVersion
-			}
+			params["platformVersion"] = platformVersion
 		}
 	}
 

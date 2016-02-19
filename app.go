@@ -34,9 +34,7 @@ func main() {
 	logLevel := app.StringOpt("log-level", "INFO", "Logging level (DEBUG, INFO, WARN, ERROR)")
 	platformVersion := app.StringOpt("platformVersion", "", "Annotation source platform. Possible values are: v1 or v2.")
 
-	if (*platformVersion=="") {
-		log.Errorf("PlatformVersion was not specified!")
-	}
+
 
 	app.Action = func() {
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
