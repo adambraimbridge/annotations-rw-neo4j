@@ -98,8 +98,8 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 func (s service) Delete(contentUUID string) (bool, error) {
 
 	query := &neoism.CypherQuery{
-		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[m:MENTIONS]->(cc:Thing) DELETE m`,
-		Parameters:   neoism.Props{"contentUUID": contentUUID},
+		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[m{platformVersion:{platformVersion}}]->(cc:Thing) DELETE m`,
+		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
 
@@ -134,7 +134,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
+	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID, s.platformVersion))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
@@ -183,7 +183,7 @@ func createAnnotationRelationship() (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (concept:Thing{uuid:{conceptID}})
-                MERGE (content)-[pred:%s]->(concept)
+                MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
                 SET pred={annProps}
                 `
 	statement = fmt.Sprintf(stmt, mentionsRel)
@@ -204,6 +204,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 
 	var prov provenance
 	params := map[string]interface{}{}
+	params["platformVersion"] = platformVersion
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
 		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&prov)
@@ -219,7 +220,6 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
 			params["annotatedDate"] = prov.AtTime
-			params["platformVersion"] = platformVersion
 		}
 	}
 
@@ -227,6 +227,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	query.Parameters = map[string]interface{}{
 		"contentID": contentUUID,
 		"conceptID": thingID,
+		"platformVersion": platformVersion,
 		"annProps":  params,
 	}
 	return &query, nil
@@ -283,13 +284,13 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
-	matchStmtTemplate := `optional match (:Thing{uuid:{contentID}})-[r:%s]->(:Thing)
+func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
+	matchStmtTemplate := `optional match (:Thing{uuid:{contentID}})-[r{platformVersion:{platformVersion}}]->(:Thing)
                         delete r`
 
 	query := neoism.CypherQuery{}
-	query.Statement = fmt.Sprintf(matchStmtTemplate, mentionsRel)
-	query.Parameters = neoism.Props{"contentID": contentUUID}
+	query.Statement = matchStmtTemplate
+	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion}
 	return &query
 }
 
