@@ -339,3 +339,51 @@ func TestCreateAnnotationQuery(t *testing.T) {
     assert.Equal(platformVersion, params["platformVersion"], fmt.Sprintf("\nExpected: %s\nActual: %s", platformVersion, params["platformVersion"]))
 
 }
+
+func TestGetRelationshipFromPredicate(t *testing.T) {
+	var tests = []struct {
+		predicate        string
+		relationship     string
+	}{
+		{ "mentions","MENTIONS"},
+		{ "isClassifiedBy","IS_CLASSIFIED_BY"},
+		{ "","MENTIONS"},
+	}
+
+	for _, test := range tests {
+		actualRelationship := getRelationshipFromPredicate(test.predicate)
+		if (test.relationship != actualRelationship) {
+			t.Errorf("\nExpected: %s\nActual: %s", test.relationship, actualRelationship)
+		}
+	}
+}
+
+func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
+	assert := assert.New(t)
+	annotationToWrite := annotation{
+		Thing: thing{ID: getURI(oldConceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			},
+			Predicate:"isClassifiedBy",
+		},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	assert.Contains(query.Statement, "IS_CLASSIFIED_BY", fmt.Sprintf("\nRelationship name is not inserted!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
+}

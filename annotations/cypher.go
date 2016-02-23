@@ -58,21 +58,21 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
-					MATCH (c:Thing{uuid:{contentUUID}})-[m:MENTIONS]->(cc:Thing)
-					WITH c, cc, m, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc)} as thing,
+					MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
+					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
 					collect(
 						{scores:[
-							{scoringSystem:'%s', value:m.relevanceScore},
-							{scoringSystem:'%s', value:m.confidenceScore}],
-						agentRole:m.annotatedBy,
-						atTime:m.annotatedDate}) as provenances
+							{scoringSystem:'%s', value:rel.relevanceScore},
+							{scoringSystem:'%s', value:rel.confidenceScore}],
+						agentRole:rel.annotatedBy,
+						atTime:rel.annotatedDate}) as provenances
 					RETURN thing, provenances ORDER BY thing.id
 									`
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion":s.platformVersion},
 		Result:     &results,
 	}
 	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -98,7 +98,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 func (s service) Delete(contentUUID string) (bool, error) {
 
 	query := &neoism.CypherQuery{
-		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[m{platformVersion:{platformVersion}}]->(cc:Thing) DELETE m`,
+		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`,
 		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
@@ -162,8 +162,9 @@ func (s service) Count() (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH ()-[r:MENTIONS]->() RETURN count(r) as c`,
-		Result:    &results,
+		Statement:  `MATCH ()-[r{platformVersion:{platformVersion}}]->() RETURN count(r) as c`,
+		Parameters: neoism.Props{"platformVersion": s.platformVersion},
+		Result:     &results,
 	}
 
 	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -179,15 +180,24 @@ func (s service) Initialise() error {
 	return nil // No constraints need to be set up
 }
 
-func createAnnotationRelationship() (statement string) {
+func createAnnotationRelationship(relation string) (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (concept:Thing{uuid:{conceptID}})
                 MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
                 SET pred={annProps}
                 `
-	statement = fmt.Sprintf(stmt, mentionsRel)
+	statement = fmt.Sprintf(stmt, relation)
 	return statement
+}
+
+func getRelationshipFromPredicate(predicate string) (relation string) {
+	if (predicate != "") {
+		relation = relations[predicate]
+	} else {
+		relation = relations["mentions"]
+	}
+	return relation
 }
 
 func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string) (*neoism.CypherQuery, error) {
@@ -205,6 +215,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	var prov provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
+
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
 		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&prov)
@@ -223,7 +234,8 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		}
 	}
 
-	query.Statement = createAnnotationRelationship()
+	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
+	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
 		"contentID": contentUUID,
 		"conceptID": thingID,

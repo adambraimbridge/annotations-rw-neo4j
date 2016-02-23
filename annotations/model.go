@@ -14,6 +14,7 @@ type thing struct {
 	ID        string   `json:"id,omitempty"`
 	PrefLabel string   `json:"prefLabel,omitempty"`
 	Types     []string `json:"types,omitempty"`
+	Predicate string   `json:"predicate,omitempty"`
 }
 
 //Provenance indicates the scores and where they came from
@@ -35,3 +36,10 @@ const (
 	relevanceScoringSystem  = "http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM"
 	confidenceScoringSystem = "http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM"
 )
+
+var relations = map[string]string{
+	"mentions"		          : "MENTIONS",
+	"isClassifiedBy"          : "IS_CLASSIFIED_BY",
+	"about"                   : "ABOUT",
+	"isPrimarilyClassifiedBy" : "IS_PRIMARILY_CLASSIFIED_BY",
+}
