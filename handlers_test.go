@@ -10,7 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"./annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/stretchr/testify/assert"
 )
 

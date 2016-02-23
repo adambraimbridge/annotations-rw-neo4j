@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"./annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
