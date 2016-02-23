@@ -226,11 +226,15 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		}
 
 		if supplied == true {
-			params["annotatedBy"] = annotatedBy
-			params["annotatedDateEpoch"] = annotatedDateEpoch
+			if (annotatedBy!="") {
+				params["annotatedBy"] = annotatedBy
+			}
+			if (prov.AtTime!="") {
+				params["annotatedDateEpoch"] = annotatedDateEpoch
+				params["annotatedDate"] = prov.AtTime
+			}
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
-			params["annotatedDate"] = prov.AtTime
 		}
 	}
 
@@ -246,15 +250,19 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 }
 
 func extractDataFromProvenance(prov *provenance) (string, int64, float64, float64, bool, error) {
-	if prov.AgentRole == "" || prov.AtTime == "" || len(prov.Scores) == 0 {
+	if len(prov.Scores) == 0 {
 		return "", -1, -1, -1, false, nil
 	}
 	var annotatedBy string
 	var annotatedDateEpoch int64
 	var confidenceScore, relevanceScore float64
 	var err error
-	annotatedBy, err = extractUUIDFromURI(prov.AgentRole)
-	annotatedDateEpoch, err = convertAnnotatedDateToEpoch(prov.AtTime)
+	if (prov.AgentRole!="") {
+		annotatedBy, err = extractUUIDFromURI(prov.AgentRole)
+	}
+	if (prov.AtTime!="") {
+		annotatedDateEpoch, err = convertAnnotatedDateToEpoch(prov.AtTime)
+	}
 	relevanceScore, confidenceScore, err = extractScores(prov.Scores)
 
 	if err != nil {
@@ -318,15 +326,10 @@ func validateAnnotations(annotations *annotations) error {
 
 func mapToResponseFormat(ann *annotation) {
 	ann.Thing.ID = mapper.IDURL(ann.Thing.ID)
-	// We expect only ONE provenance
-	var provenanceValid bool
+	// We expect only ONE provenance - provenance value is considered valid even if the AgentRole is not specified. See: v1 - isClassifiedBy
 	for idx := range ann.Provenances {
 		if ann.Provenances[idx].AgentRole != "" {
 			ann.Provenances[idx].AgentRole = mapper.IDURL(ann.Provenances[idx].AgentRole)
-			provenanceValid = true
 		}
-	}
-	if provenanceValid != true {
-		ann.Provenances = nil
 	}
 }

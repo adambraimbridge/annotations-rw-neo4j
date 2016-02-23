@@ -16,7 +16,7 @@ _NB You will need to tag a commit in order to build, since the UI asks for a tag
 * `go test ./...`
 * `go install`
 * `$GOPATH/bin/annotations-private-rw --neo-url={neo4jUrl} --port={port} --log-level={DEBUG|INFO|WARN|ERROR}`
-_Exept platformVersion, all arguments are optional.
+_Except platformVersion, all arguments are optional.
 --neo-url defaults to http://localhost:7474/db/data, which is the out of box url for a local neo4j instance.
 --port defaults to 8080.
 --log-level defaults to INFO

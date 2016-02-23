@@ -153,13 +153,29 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-func TestWriteOnlyMandatoryValuesPresent(t *testing.T) {
+func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert := assert.New(t)
 
 	annotationsDriver = getAnnotationsService(t)
 
 	annotationsToWrite := annotations{annotation{
-		Thing: thing{ID: getURI(conceptUUID)},
+		Thing: thing{ID: getURI(conceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "",
+				AtTime:    "",
+			},
+		},
 	}}
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
