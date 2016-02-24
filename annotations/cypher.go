@@ -33,13 +33,17 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	cypherRunner neoutils.CypherRunner
-	indexManager neoutils.IndexManager
+	cypherRunner    neoutils.CypherRunner
+	indexManager    neoutils.IndexManager
+	platformVersion string
 }
 
 //NewAnnotationsService instantiate driver
-func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager) service {
-	return service{cypherRunner, indexManager}
+func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager, platformVersion string) service {
+	if (platformVersion=="") {
+		log.Fatalf("PlatformVersion was not specified!")
+	}
+	return service{cypherRunner, indexManager, platformVersion}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
@@ -54,21 +58,21 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
-					MATCH (c:Thing{uuid:{contentUUID}})-[m:MENTIONS]->(cc:Thing)
-					WITH c, cc, m, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc)} as thing,
+					MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
+					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
 					collect(
 						{scores:[
-							{scoringSystem:'%s', value:m.relevanceScore},
-							{scoringSystem:'%s', value:m.confidenceScore}],
-						agentRole:m.annotatedBy,
-						atTime:m.annotatedDate}) as provenances
+							{scoringSystem:'%s', value:rel.relevanceScore},
+							{scoringSystem:'%s', value:rel.confidenceScore}],
+						agentRole:rel.annotatedBy,
+						atTime:rel.annotatedDate}) as provenances
 					RETURN thing, provenances ORDER BY thing.id
 									`
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion":s.platformVersion},
 		Result:     &results,
 	}
 	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -94,8 +98,8 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 func (s service) Delete(contentUUID string) (bool, error) {
 
 	query := &neoism.CypherQuery{
-		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[m:MENTIONS]->(cc:Thing) DELETE m`,
-		Parameters:   neoism.Props{"contentUUID": contentUUID},
+		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`,
+		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
 
@@ -130,11 +134,11 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID))
+	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID, s.platformVersion))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
-		query, err := createAnnotationQuery(contentUUID, annotationToWrite)
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion)
 		if err != nil {
 			return err
 		}
@@ -158,8 +162,9 @@ func (s service) Count() (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH ()-[r:MENTIONS]->() RETURN count(r) as c`,
-		Result:    &results,
+		Statement:  `MATCH ()-[r{platformVersion:{platformVersion}}]->() RETURN count(r) as c`,
+		Parameters: neoism.Props{"platformVersion": s.platformVersion},
+		Result:     &results,
 	}
 
 	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -175,18 +180,27 @@ func (s service) Initialise() error {
 	return nil // No constraints need to be set up
 }
 
-func createAnnotationRelationship() (statement string) {
+func createAnnotationRelationship(relation string) (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (concept:Thing{uuid:{conceptID}})
-                MERGE (content)-[pred:%s]->(concept)
+                MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
                 SET pred={annProps}
                 `
-	statement = fmt.Sprintf(stmt, mentionsRel)
+	statement = fmt.Sprintf(stmt, relation)
 	return statement
 }
 
-func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQuery, error) {
+func getRelationshipFromPredicate(predicate string) (relation string) {
+	if (predicate != "") {
+		relation = relations[predicate]
+	} else {
+		relation = relations["mentions"]
+	}
+	return relation
+}
+
+func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
 	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
@@ -200,6 +214,8 @@ func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQu
 
 	var prov provenance
 	params := map[string]interface{}{}
+	params["platformVersion"] = platformVersion
+
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
 		annotatedBy, annotatedDateEpoch, relevanceScore, confidenceScore, supplied, err := extractDataFromProvenance(&prov)
@@ -210,34 +226,43 @@ func createAnnotationQuery(contentUUID string, ann annotation) (*neoism.CypherQu
 		}
 
 		if supplied == true {
-			params["annotatedBy"] = annotatedBy
-			params["annotatedDateEpoch"] = annotatedDateEpoch
+			if (annotatedBy!="") {
+				params["annotatedBy"] = annotatedBy
+			}
+			if (prov.AtTime!="") {
+				params["annotatedDateEpoch"] = annotatedDateEpoch
+				params["annotatedDate"] = prov.AtTime
+			}
 			params["relevanceScore"] = relevanceScore
 			params["confidenceScore"] = confidenceScore
-			params["annotatedDate"] = prov.AtTime
-			params["platformVersion"] = "v2"
 		}
 	}
 
-	query.Statement = createAnnotationRelationship()
+	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
+	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
 		"contentID": contentUUID,
 		"conceptID": thingID,
+		"platformVersion": platformVersion,
 		"annProps":  params,
 	}
 	return &query, nil
 }
 
 func extractDataFromProvenance(prov *provenance) (string, int64, float64, float64, bool, error) {
-	if prov.AgentRole == "" || prov.AtTime == "" || len(prov.Scores) == 0 {
+	if len(prov.Scores) == 0 {
 		return "", -1, -1, -1, false, nil
 	}
 	var annotatedBy string
 	var annotatedDateEpoch int64
 	var confidenceScore, relevanceScore float64
 	var err error
-	annotatedBy, err = extractUUIDFromURI(prov.AgentRole)
-	annotatedDateEpoch, err = convertAnnotatedDateToEpoch(prov.AtTime)
+	if (prov.AgentRole!="") {
+		annotatedBy, err = extractUUIDFromURI(prov.AgentRole)
+	}
+	if (prov.AtTime!="") {
+		annotatedDateEpoch, err = convertAnnotatedDateToEpoch(prov.AtTime)
+	}
 	relevanceScore, confidenceScore, err = extractScores(prov.Scores)
 
 	if err != nil {
@@ -279,13 +304,13 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func dropAllAnnotationsQuery(contentUUID string) *neoism.CypherQuery {
-	matchStmtTemplate := `optional match (:Thing{uuid:{contentID}})-[r:%s]->(:Thing)
+func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
+	matchStmtTemplate := `optional match (:Thing{uuid:{contentID}})-[r{platformVersion:{platformVersion}}]->(:Thing)
                         delete r`
 
 	query := neoism.CypherQuery{}
-	query.Statement = fmt.Sprintf(matchStmtTemplate, mentionsRel)
-	query.Parameters = neoism.Props{"contentID": contentUUID}
+	query.Statement = matchStmtTemplate
+	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion}
 	return &query
 }
 
@@ -301,15 +326,10 @@ func validateAnnotations(annotations *annotations) error {
 
 func mapToResponseFormat(ann *annotation) {
 	ann.Thing.ID = mapper.IDURL(ann.Thing.ID)
-	// We expect only ONE provenance
-	var provenanceValid bool
+	// We expect only ONE provenance - provenance value is considered valid even if the AgentRole is not specified. See: v1 - isClassifiedBy
 	for idx := range ann.Provenances {
 		if ann.Provenances[idx].AgentRole != "" {
 			ann.Provenances[idx].AgentRole = mapper.IDURL(ann.Provenances[idx].AgentRole)
-			provenanceValid = true
 		}
-	}
-	if provenanceValid != true {
-		ann.Provenances = nil
 	}
 }

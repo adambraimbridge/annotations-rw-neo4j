@@ -16,10 +16,11 @@ _NB You will need to tag a commit in order to build, since the UI asks for a tag
 * `go test ./...`
 * `go install`
 * `$GOPATH/bin/annotations-private-rw --neo-url={neo4jUrl} --port={port} --log-level={DEBUG|INFO|WARN|ERROR}`
-_All arguments are optional.
+_Except platformVersion, all arguments are optional.
 --neo-url defaults to http://localhost:7474/db/data, which is the out of box url for a local neo4j instance.
 --port defaults to 8080.
 --log-level defaults to INFO
+--platformVersion should have one of v1 or v2
 See help text for other arguments._
 
 ## Endpoints
@@ -27,9 +28,10 @@ See help text for other arguments._
 ### PUT
 /content/{annotatedContentId}/annotations
 
-Each annotation is added as a MENTIONS relationship between the content and a concept.
+Each annotation is added with a relationship according to the predicate property from the payload.
+If that is empty: a default MENTIONS relationship will be added between the content and a concept.
 
-This acts as a replace - all existing annotations are removed, and the new ones are created. This is because we get these
+This operation acts as a replace - all existing annotations are removed, and the new ones are created - for the specified platformVersion. This is because we get these
 annotations wholesale from the concept extraction service, which annotates the whole content on each publish.
 
 Supplying an empty list as the request body will remove all annotations for the content.
@@ -50,14 +52,14 @@ Example:
     "@annotations/examplePutBody.json"
 
 NB: Although provenances are supplied is a list, we don't expect to get more than one provenance: we will take the scores from that one
-and apply them to the MENTIONS relationship that we are creating for that annotation.  
+and apply them to the relationship that we are creating for that annotation.
 
 If there is no provenance, or the provenance is incomplete (e.g. no agent role) we'll still
-create a MENTIONS relationship, it just won't have score, agent and time properties.
+create the relationship, it just won't have score, agent and time properties.
 
 ### GET
 /content/{annotatedContentId}/annotations
-This internal read should return what got written (i.e., this isn't the public annotations read API)
+This internal read should return what got written (i.e., this isn't the public annotations read API) - for the specified platformVersion.
 
 If not found, you'll get a 404 response.
 
@@ -68,6 +70,8 @@ Empty fields are omitted from the response.
 /content/{contentId}/annotations/{annotationType}/{conceptId}
 
 conceptId here is just the uuid, not the full URI
+
+Deletes all the annotations with the specified platformVersion.
 
 NB: /content/{contentId}/annotations/mentions/{conceptId} is used to allow annotations to be removed in Spyglass (not sure whether this is much used because if the content is republished, we lose the fact an annotation was deleted).
 
