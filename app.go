@@ -38,6 +38,7 @@ func main() {
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
 
 		db, err := neoism.Connect(*neoURL)
+		db.Session.Client = &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 100}}
 		if err != nil {
 			log.Fatalf("Error connecting to neo4j %s", err)
 		}
