@@ -40,7 +40,7 @@ type service struct {
 
 //NewAnnotationsService instantiate driver
 func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager, platformVersion string) service {
-	if (platformVersion=="") {
+	if platformVersion == "" {
 		log.Fatalf("PlatformVersion was not specified!")
 	}
 	return service{cypherRunner, indexManager, platformVersion}
@@ -72,7 +72,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion":s.platformVersion},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		Result:     &results,
 	}
 	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -192,7 +192,7 @@ func createAnnotationRelationship(relation string) (statement string) {
 }
 
 func getRelationshipFromPredicate(predicate string) (relation string) {
-	if (predicate != "") {
+	if predicate != "" {
 		relation = relations[predicate]
 	} else {
 		relation = relations["mentions"]
@@ -226,10 +226,10 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		}
 
 		if supplied == true {
-			if (annotatedBy!="") {
+			if annotatedBy != "" {
 				params["annotatedBy"] = annotatedBy
 			}
-			if (prov.AtTime!="") {
+			if prov.AtTime != "" {
 				params["annotatedDateEpoch"] = annotatedDateEpoch
 				params["annotatedDate"] = prov.AtTime
 			}
@@ -241,10 +241,10 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
 	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
-		"contentID": contentUUID,
-		"conceptID": thingID,
+		"contentID":       contentUUID,
+		"conceptID":       thingID,
 		"platformVersion": platformVersion,
-		"annProps":  params,
+		"annProps":        params,
 	}
 	return &query, nil
 }
@@ -257,10 +257,10 @@ func extractDataFromProvenance(prov *provenance) (string, int64, float64, float6
 	var annotatedDateEpoch int64
 	var confidenceScore, relevanceScore float64
 	var err error
-	if (prov.AgentRole!="") {
+	if prov.AgentRole != "" {
 		annotatedBy, err = extractUUIDFromURI(prov.AgentRole)
 	}
-	if (prov.AtTime!="") {
+	if prov.AtTime != "" {
 		annotatedDateEpoch, err = convertAnnotatedDateToEpoch(prov.AtTime)
 	}
 	relevanceScore, confidenceScore, err = extractScores(prov.Scores)

@@ -351,24 +351,24 @@ func TestCreateAnnotationQuery(t *testing.T) {
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-    params := query.Parameters["annProps"].(map[string]interface{})
-    assert.Equal(platformVersion, params["platformVersion"], fmt.Sprintf("\nExpected: %s\nActual: %s", platformVersion, params["platformVersion"]))
+	params := query.Parameters["annProps"].(map[string]interface{})
+	assert.Equal(platformVersion, params["platformVersion"], fmt.Sprintf("\nExpected: %s\nActual: %s", platformVersion, params["platformVersion"]))
 
 }
 
 func TestGetRelationshipFromPredicate(t *testing.T) {
 	var tests = []struct {
-		predicate        string
-		relationship     string
+		predicate    string
+		relationship string
 	}{
-		{ "mentions","MENTIONS"},
-		{ "isClassifiedBy","IS_CLASSIFIED_BY"},
-		{ "","MENTIONS"},
+		{"mentions", "MENTIONS"},
+		{"isClassifiedBy", "IS_CLASSIFIED_BY"},
+		{"", "MENTIONS"},
 	}
 
 	for _, test := range tests {
 		actualRelationship := getRelationshipFromPredicate(test.predicate)
-		if (test.relationship != actualRelationship) {
+		if test.relationship != actualRelationship {
 			t.Errorf("\nExpected: %s\nActual: %s", test.relationship, actualRelationship)
 		}
 	}
@@ -384,7 +384,7 @@ func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 				"http://www.ft.com/ontology/core/Thing",
 				"http://www.ft.com/ontology/concept/Concept",
 			},
-			Predicate:"isClassifiedBy",
+			Predicate: "isClassifiedBy",
 		},
 		Provenances: []provenance{
 			{
