@@ -30,9 +30,11 @@ func TestPutHandler(t *testing.T) {
 	body, err := ioutil.ReadFile("annotations/examplePutBody.json")
 	assert.NoError(err, "Unexpected error")
 	invalidBody := []byte(`{"id": "1234"}`)
+	missingConceptIDBody := []byte(`"{"thing": {"prefLabel": "Apple"}`)
 	tests := []test{
 		{"Success", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", body), dummyService{contentUUID: knownUUID}, http.StatusCreated, "application/json", message("Annotations for content 12345 created")},
 		{"ParseError", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", invalidBody), dummyService{contentUUID: knownUUID, failParse: true}, http.StatusBadRequest, "application/json", message("Error (TEST failing to DECODE) parsing annotation request")},
+		{"ValidationError", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", missingConceptIDBody), dummyService{contentUUID: knownUUID, failValidation: true}, http.StatusBadRequest, "application/json", message("Error creating annotations (TEST failing validation)")},
 		{"NotJson", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "text/html", body), dummyService{contentUUID: knownUUID}, http.StatusBadRequest, "application/json", message("Http Header 'Content-Type' is not 'application/json', this is a JSON API")},
 		{"WriteFailed", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", body), dummyService{contentUUID: knownUUID, failWrite: true}, http.StatusServiceUnavailable, "application/json", message("Error creating annotations (TEST failing to WRITE)")},
 	}
@@ -108,18 +110,22 @@ func message(errMsg string) string {
 }
 
 type dummyService struct {
-	contentUUID string
-	failWrite   bool
-	failRead    bool
-	failParse   bool
-	failDelete  bool
-	failCount   bool
+	contentUUID    string
+	failWrite      bool
+	failRead       bool
+	failParse      bool
+	failValidation bool
+	failDelete     bool
+	failCount      bool
 }
 
 type dummyServiceData struct {
 }
 
 func (dS dummyService) Write(contentUUID string, thing interface{}) error {
+	if dS.failValidation {
+		return annotations.ValidationError{"TEST failing validation"}
+	}
 	if dS.failWrite {
 		return errors.New("TEST failing to WRITE")
 	}

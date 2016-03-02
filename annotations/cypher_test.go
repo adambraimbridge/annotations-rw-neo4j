@@ -51,6 +51,8 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToDelete), "Failed to write annotation")
 
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToDelete)
+
 	found, err := annotationsDriver.Delete(contentUUID)
 	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotation for content uuid %, conceptUUID %s", contentUUID, conceptUUID)
@@ -65,10 +67,40 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	checkNodeIsStillPresent(conceptUUID, t)
 
 	err = deleteNode(annotationsDriver, contentUUID)
-	assert.NoError(err, "Error trying to delete content node with uuid %s", contentUUID)
+	assert.NoError(err, "Error trying to delete content node with uuid %s, err=%v", contentUUID, err)
 	err = deleteNode(annotationsDriver, conceptUUID)
-	assert.NoError(err, "Error trying to delete concept node with uuid %s", conceptUUID)
+	assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", conceptUUID, err)
 
+}
+
+func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
+	assert := assert.New(t)
+
+	annotationsDriver = getAnnotationsService(t)
+
+	annotationsToWrite := annotations{annotation{
+		Thing: thing{PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}}
+
+	err := annotationsDriver.Write(contentUUID, annotationsToWrite)
+	assert.Error(err, "Should have failed to write annotation")
+	_, ok := err.(ValidationError)
+	assert.True(ok, "Should have returned a validation error")
 }
 
 func TestWriteAllValuesPresent(t *testing.T) {
@@ -246,6 +278,83 @@ func TestConnectivityCheck(t *testing.T) {
 	assert.NoError(err, "Unexpected error on connectivity check")
 }
 
+func TestCreateAnnotationQuery(t *testing.T) {
+	assert := assert.New(t)
+	annotationToWrite := annotation{
+		Thing: thing{ID: getURI(oldConceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	params := query.Parameters["annProps"].(map[string]interface{})
+	assert.Equal(platformVersion, params["platformVersion"], fmt.Sprintf("\nExpected: %s\nActual: %s", platformVersion, params["platformVersion"]))
+
+}
+
+func TestGetRelationshipFromPredicate(t *testing.T) {
+	var tests = []struct {
+		predicate    string
+		relationship string
+	}{
+		{"mentions", "MENTIONS"},
+		{"isClassifiedBy", "IS_CLASSIFIED_BY"},
+		{"", "MENTIONS"},
+	}
+
+	for _, test := range tests {
+		actualRelationship := getRelationshipFromPredicate(test.predicate)
+		if test.relationship != actualRelationship {
+			t.Errorf("\nExpected: %s\nActual: %s", test.relationship, actualRelationship)
+		}
+	}
+}
+
+func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
+	assert := assert.New(t)
+	annotationToWrite := annotation{
+		Thing: thing{ID: getURI(oldConceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			},
+			Predicate: "isClassifiedBy",
+		},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	assert.Contains(query.Statement, "IS_CLASSIFIED_BY", fmt.Sprintf("\nRelationship name is not inserted!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
+}
+
 func getAnnotationsService(t *testing.T) service {
 	assert := assert.New(t)
 	url := os.Getenv("NEO4J_TEST_URL")
@@ -325,81 +434,4 @@ func deleteNode(annotationsDriver service, uuid string) error {
 	}
 
 	return annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
-}
-
-func TestCreateAnnotationQuery(t *testing.T) {
-	assert := assert.New(t)
-	annotationToWrite := annotation{
-		Thing: thing{ID: getURI(oldConceptUUID),
-			PrefLabel: "prefLabel",
-			Types: []string{
-				"http://www.ft.com/ontology/organisation/Organisation",
-				"http://www.ft.com/ontology/core/Thing",
-				"http://www.ft.com/ontology/concept/Concept",
-			}},
-		Provenances: []provenance{
-			{
-				Scores: []score{
-					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
-				},
-				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
-				AtTime:    "2016-01-01T19:43:47.314Z",
-			},
-		},
-	}
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	params := query.Parameters["annProps"].(map[string]interface{})
-	assert.Equal(platformVersion, params["platformVersion"], fmt.Sprintf("\nExpected: %s\nActual: %s", platformVersion, params["platformVersion"]))
-
-}
-
-func TestGetRelationshipFromPredicate(t *testing.T) {
-	var tests = []struct {
-		predicate    string
-		relationship string
-	}{
-		{"mentions", "MENTIONS"},
-		{"isClassifiedBy", "IS_CLASSIFIED_BY"},
-		{"", "MENTIONS"},
-	}
-
-	for _, test := range tests {
-		actualRelationship := getRelationshipFromPredicate(test.predicate)
-		if test.relationship != actualRelationship {
-			t.Errorf("\nExpected: %s\nActual: %s", test.relationship, actualRelationship)
-		}
-	}
-}
-
-func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
-	assert := assert.New(t)
-	annotationToWrite := annotation{
-		Thing: thing{ID: getURI(oldConceptUUID),
-			PrefLabel: "prefLabel",
-			Types: []string{
-				"http://www.ft.com/ontology/organisation/Organisation",
-				"http://www.ft.com/ontology/core/Thing",
-				"http://www.ft.com/ontology/concept/Concept",
-			},
-			Predicate: "isClassifiedBy",
-		},
-		Provenances: []provenance{
-			{
-				Scores: []score{
-					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
-				},
-				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
-				AtTime:    "2016-01-01T19:43:47.314Z",
-			},
-		},
-	}
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "IS_CLASSIFIED_BY", fmt.Sprintf("\nRelationship name is not inserted!"))
-	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
 }
