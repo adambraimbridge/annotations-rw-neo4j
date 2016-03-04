@@ -127,7 +127,8 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		return errors.New("Content uuid is required")
 	}
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
-		return fmt.Errorf("Annotation for content %s is not valid. %s", contentUUID, err.Error())
+		log.Warnf("Validation of supplied annotations failed")
+		return err
 	}
 
 	if len(annotationsToWrite) == 0 {
@@ -318,10 +319,19 @@ func validateAnnotations(annotations *annotations) error {
 	//TODO - for consistency, we should probably just not create the annotation?
 	for _, annotation := range *annotations {
 		if annotation.Thing.ID == "" {
-			return fmt.Errorf("Concept uuid missing for annotation %+v", annotation)
+			return ValidationError{fmt.Sprintf("Concept uuid missing for annotation %+v", annotation)}
 		}
 	}
 	return nil
+}
+
+//ValidationError is thrown when the annotations are not valid because mandatory information is missing
+type ValidationError struct {
+	Msg string
+}
+
+func (v ValidationError) Error() string {
+	return v.Msg
 }
 
 func mapToResponseFormat(ann *annotation) {

@@ -77,6 +77,11 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	err = hh.AnnotationsService.Write(uuid, anns)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
+		if _, ok := err.(annotations.ValidationError); ok {
+			log.Error(msg)
+			writeJSONError(w, msg, http.StatusBadRequest)
+			return
+		}
 		log.Error(msg)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
