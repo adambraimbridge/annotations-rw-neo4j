@@ -12,6 +12,7 @@ import (
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
+	status "github.com/Financial-Times/service-status-go/httphandlers"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
@@ -56,8 +57,17 @@ func main() {
 		}
 		batchRunner := neoutils.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
 		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db, *platformVersion)}
+
+		// don't want to monitor or log these endpoints, they are called a lot
+		http.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
+		http.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
+
 		r := router(httpHandlers)
 		http.Handle("/", r)
+
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
+			log.Fatalf("Unable to start server: %v", err)
+		}
 
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port),
 			httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
@@ -71,22 +81,27 @@ func main() {
 	app.Run(os.Args)
 }
 
-func router(hh httpHandlers) *mux.Router {
-	r := mux.NewRouter()
-	r.Headers("Content-type: application/json")
+func router(hh httpHandlers) http.Handler {
+	servicesRouter := mux.NewRouter()
+	servicesRouter.Headers("Content-type: application/json")
 
 	// Healthchecks and standards first
-	r.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
+	servicesRouter.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
 		"Checks for accessing neo4j", hh.HealthCheck()))
-	r.HandleFunc("/ping", Ping)
-	r.HandleFunc("/__ping", Ping)
+	servicesRouter.HandleFunc(status.PingPath, status.PingHandler)
+	servicesRouter.HandleFunc(status.PingPathDW, status.PingHandler)
 
 	// Then API specific ones:
-	r.HandleFunc("/content/{uuid}/annotations", hh.GetAnnotations).Methods("GET")
-	r.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
-	r.HandleFunc("/content/{uuid}/annotations", hh.DeleteAnnotations).Methods("DELETE")
-	r.HandleFunc("/content/annotations/__count", hh.CountAnnotations).Methods("GET")
-	return r
+	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.GetAnnotations).Methods("GET")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.DeleteAnnotations).Methods("DELETE")
+	servicesRouter.HandleFunc("/content/annotations/__count", hh.CountAnnotations).Methods("GET")
+
+	var monitoringRouter http.Handler = servicesRouter
+	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), monitoringRouter)
+	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
+
+	return monitoringRouter
 }
 
 func setLogLevel(level string) {
