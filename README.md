@@ -67,23 +67,18 @@ Empty fields are omitted from the response.
 `curl -H "X-Request-Id: 123" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations`
 
 ### DELETE
-/content/{annotatedContentId}/annotations
+/content/{contentId}/annotations/
 
 Deletes all the annotations with the specified platformVersion.
 
-Will return 204 if successful, 404 if not found.
+Will return 204 if successful, 404 if not found
 
 `curl -XDELETE -H "X-Request-Id: 123" localhost:8080/3fa70485-3a57-3b9b-9449-774b001cd965/annotations`
+
+NB: /content/{contentId}/annotations/mentions/{conceptId} also existed in the old annotations writer and was used to allow annotations to be removed in Spyglass (however it was not used because if the content is republished, we lose the fact an annotation was deleted). We have chosen not to replicate
+that functionality in this app.
+
 
 ## Healthchecks
 * Check connectivity [http://localhost:8080/__health](http://localhost:8080/__health)
 * Ping: [http://localhost:8080/__ping](http://localhost:8080/__ping)
-
-## TODO
-
-### API specific
-* Runbook
-* Update or new API documentation based on original google docs
-
-### Cross cutting concerns
-* Allow service to start if neo4j is unavailable at startup time
