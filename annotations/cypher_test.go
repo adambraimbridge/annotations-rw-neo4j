@@ -14,9 +14,10 @@ var annotationsDriver service
 
 const (
 	contentUUID       = "32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID       = "25364312-ea32-3aa9-b3d6-4d2cde11eddd"
+	conceptUUID       = "412e4ca3-f8d5-4456-8606-064c1dba3c45"
 	secondConceptUUID = "c834adfa-10c9-4748-8a21-c08537172706"
 	oldConceptUUID    = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	brandUUID 				= "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
 	platformVersion   = "v2"
 )
 
@@ -133,6 +134,103 @@ func TestWriteAllValuesPresent(t *testing.T) {
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToWrite)
 
 	cleanUp(t, contentUUID, []string{conceptUUID})
+}
+
+func TestWriteDoesNotRemoveExistingIsClassifedByBrandRelationships(t *testing.T) {
+	assert := assert.New(t)
+
+	annotationsDriver = getAnnotationsService(t)
+
+	defer func() {
+		err := deleteNode(annotationsDriver, contentUUID)
+		assert.NoError(err, "Error trying to delete content node with uuid %s, err=%v", contentUUID, err)
+		err = deleteNode(annotationsDriver, conceptUUID)
+		assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", conceptUUID, err)
+		err = deleteNode(annotationsDriver, brandUUID)
+		assert.NoError(err, "Error trying to delete brand node with uuid %s, err=%v", brandUUID, err)
+	}()
+
+	createBrandQuery := &neoism.CypherQuery{
+		Statement: `MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing RETURN b.uuid`,
+		Parameters: map[string]interface{}{
+			"brandUuid": brandUUID,
+		},
+	}
+
+	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{createBrandQuery})
+
+	createContentQuery := &neoism.CypherQuery{
+		Statement: `MERGE (c:Content{uuid:{contentUuid}}) SET c :Thing RETURN c.uuid`,
+		Parameters: map[string]interface{}{
+			"contentUuid": contentUUID,
+		},
+	}
+
+	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{createContentQuery})
+
+	contentQuery := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid:{contentUuid}}) MATCH (b:Brand{uuid:{brandUuid}}) CREATE (n)-[rel:IS_CLASSIFIED_BY{platformVersion:"v2"}]->(b) RETURN rel.platformVersion`,
+		Parameters: map[string]interface{}{
+			"contentUuid": contentUUID,
+			"brandUuid": brandUUID,
+		},
+	}
+
+	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+
+	annotationsToWrite := annotations{annotation{
+		Thing: thing{ID: getURI(conceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}}
+
+	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+	found, err := annotationsDriver.Delete(contentUUID)
+	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
+	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
+
+	result := []struct {
+		Uuid string `json:"b.uuid"`
+	}{}
+
+	getContentQuery := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[:IS_CLASSIFIED_BY]->(b:Brand) RETURN b.uuid`,
+		Parameters: map[string]interface{}{
+			"contentUuid": contentUUID,
+			"brandUuid": brandUUID,
+		},
+		Result: &result,
+	}
+
+	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+	assert.NoError(readErr)
+	assert.NotEmpty(result)
+
+	removeRelationshipQuery := &neoism.CypherQuery{
+		Statement: `
+			MATCH (b:Thing {uuid:{brandUuid}})<-[rel:IS_CLASSIFIED_BY]-(t:Thing)
+			DELETE rel
+		`,
+		Parameters: map[string]interface{}{
+			"brandUuid": brandUUID,
+		},
+	}
+
+	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{removeRelationshipQuery})
 }
 
 func TestWriteAndReadMultipleAnnotations(t *testing.T) {

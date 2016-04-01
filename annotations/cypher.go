@@ -98,7 +98,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 func (s service) Delete(contentUUID string) (bool, error) {
 
 	query := &neoism.CypherQuery{
-		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`,
+		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`,
 		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
@@ -306,8 +306,8 @@ func extractScores(scores []score) (float64, float64, error) {
 }
 
 func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
-	matchStmtTemplate := `optional match (:Thing{uuid:{contentID}})-[r{platformVersion:{platformVersion}}]->(:Thing)
-                        delete r`
+	matchStmtTemplate := `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
+                        DELETE r`
 
 	query := neoism.CypherQuery{}
 	query.Statement = matchStmtTemplate
