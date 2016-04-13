@@ -5,10 +5,10 @@ __An API for reading/writing annotations into Neo4j. Expects the annotations jso
 ## Build & deployment etc:
 *TODO*
 _NB You will need to tag a commit in order to build, since the UI asks for a tag to build / deploy_
-* [Jenkins view](http://ftjen10085-lvpr-uk-p:8181/view/annotations-private-rw)
-* [Build and publish to forge](http://ftjen10085-lvpr-uk-p:8181/job/annotations-private-rw)
-* [Deploy to test or production](http://ftjen10085-lvpr-uk-p:8181/job/annotations-private-rw)
-
+* [Jenkins view](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/)
+* [Build and publish to forge](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-build/)
+* [Deploy to Test](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-deploy-test/)
+* [Deploy to Prod](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-deploy-prod/)
 
 ## Installation & running locally
 * `go get -u github.com/Financial-Times/annotations-private-rw`
