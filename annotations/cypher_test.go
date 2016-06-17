@@ -17,9 +17,9 @@ const (
 	conceptUUID       = "412e4ca3-f8d5-4456-8606-064c1dba3c45"
 	secondConceptUUID = "c834adfa-10c9-4748-8a21-c08537172706"
 	oldConceptUUID    = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
-	brandUUID 				= "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
-	v2PlatformVersion   = "v2"
-	v1PlatformVersion   = "v1"
+	brandUUID         = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
+	v2PlatformVersion = "v2"
+	v1PlatformVersion = "v1"
 )
 
 func getURI(uuid string) string {
@@ -165,8 +165,8 @@ func TestWriteDoesNotRemoveExistingIsClassifedByBrandRelationships(t *testing.T)
 		MERGE (b:Brand{uuid:{brandUuid}})
 		CREATE (n)-[rel:IS_CLASSIFIED_BY{platformVersion:{platformVersion}}]->(b) RETURN rel.platformVersion`,
 		Parameters: map[string]interface{}{
-			"contentUuid": contentUUID,
-			"brandUuid": brandUUID,
+			"contentUuid":     contentUUID,
+			"brandUuid":       brandUUID,
 			"platformVersion": v2PlatformVersion,
 		},
 	}
@@ -206,7 +206,7 @@ func TestWriteDoesNotRemoveExistingIsClassifedByBrandRelationships(t *testing.T)
 		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[:IS_CLASSIFIED_BY]->(b:Brand) RETURN b.uuid`,
 		Parameters: map[string]interface{}{
 			"contentUuid": contentUUID,
-			"brandUuid": brandUUID,
+			"brandUuid":   brandUUID,
 		},
 		Result: &result,
 	}
@@ -252,10 +252,10 @@ func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *te
 			    MERGE (b:Thing{uuid:{secondConceptUUID}})
 			    CREATE (n)-[rel2:IS_CLASSIFIED_BY{platformVersion:{platformVersion}}]->(b)`,
 		Parameters: map[string]interface{}{
-			"contentUuid": contentUUID,
-			"conceptUUID": conceptUUID,
+			"contentUuid":       contentUUID,
+			"conceptUUID":       conceptUUID,
 			"secondConceptUUID": secondConceptUUID,
-			"platformVersion": v1PlatformVersion,
+			"platformVersion":   v1PlatformVersion,
 		},
 	}
 
@@ -294,7 +294,7 @@ func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *te
 	getContentQuery := &neoism.CypherQuery{
 		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[r]->(b:Thing) where r.platformVersion={platformVersion} RETURN b.uuid`,
 		Parameters: map[string]interface{}{
-			"contentUuid": contentUUID,
+			"contentUuid":     contentUUID,
 			"platformVersion": v1PlatformVersion,
 		},
 		Result: &result,
@@ -308,7 +308,7 @@ func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *te
 	getContentQuery = &neoism.CypherQuery{
 		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[r]->(b:Thing) where r.platformVersion={platformVersion} RETURN b.uuid`,
 		Parameters: map[string]interface{}{
-			"contentUuid": contentUUID,
+			"contentUuid":     contentUUID,
 			"platformVersion": v2PlatformVersion,
 		},
 		Result: &result,
