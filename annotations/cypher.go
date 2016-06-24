@@ -306,8 +306,20 @@ func extractScores(scores []score) (float64, float64, error) {
 }
 
 func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
-	matchStmtTemplate := `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
+
+	var matchStmtTemplate string
+
+	//TODO hard-coded verification:
+	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
+	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
+	if platformVersion == "v2" {
+		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
                         DELETE r`
+	} else {
+		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+			WHERE r.platformVersion={platformVersion}
+                        DELETE r`
+	}
 
 	query := neoism.CypherQuery{}
 	query.Statement = matchStmtTemplate
