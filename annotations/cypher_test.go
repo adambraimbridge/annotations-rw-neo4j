@@ -65,8 +65,8 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert.False(found, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.NoError(err, "Error trying to find annotation for content %s", contentUUID)
 
-	checkNodeIsStillPresent(contentUUID, t)
-	checkNodeIsStillPresent(conceptUUID, t)
+	checkContentNodeIsStillPresent(contentUUID, t)
+	checkConceptNodeIsStillPresent(conceptUUID, t)
 
 	err = deleteNode(annotationsDriver, contentUUID)
 	assert.NoError(err, "Error trying to delete content node with uuid %s, err=%v", contentUUID, err)
@@ -137,7 +137,7 @@ func TestWriteAllValuesPresent(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-func TestWriteDoesNotRemoveExistingIsClassifedByBrandRelationships(t *testing.T) {
+func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationships(t *testing.T) {
 	assert := assert.New(t)
 
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
@@ -588,7 +588,7 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 	}
 }
 
-func checkNodeIsStillPresent(uuid string, t *testing.T) {
+func checkContentNodeIsStillPresent(uuid string, t *testing.T) {
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 	results := []struct {
@@ -597,6 +597,28 @@ func checkNodeIsStillPresent(uuid string, t *testing.T) {
 
 	query := &neoism.CypherQuery{
 		Statement: `MATCH (n:Thing {uuid:{uuid}}) return n.uuid
+		as uuid`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+		Result: &results,
+	}
+
+	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	assert.NoError(err, "UnexpectedError")
+	assert.True(len(results) == 1, "Didn't find a node")
+	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
+}
+
+func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
+	assert := assert.New(t)
+	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
+	results := []struct {
+		UUID string `json:"uuid"`
+	}{}
+
+	query := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing)<-[IDENTIFIER]-(upp:UPPIdentifier{value:{uuid}}) return n.uuid
 		as uuid`,
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
@@ -630,7 +652,8 @@ func deleteNode(annotationsDriver service, uuid string) error {
 	query := &neoism.CypherQuery{
 		Statement: `
 			MATCH (p:Thing {uuid: {uuid}})
-			DELETE p
+			OPTIONAL MATCH (identifier:UPPIdentifier)-[rel:IDENTIFIES]->(p)
+			DELETE identifier, rel, p
 		`,
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
