@@ -106,8 +106,6 @@ func (s service) Delete(contentUUID string) (bool, error) {
 		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
 	}
 
-	fmt.Printf("this is the statements i will execute:" + deleteStatement)
-
 	query := &neoism.CypherQuery{
 		Statement:    deleteStatement,
 		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
