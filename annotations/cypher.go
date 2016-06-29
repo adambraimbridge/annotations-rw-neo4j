@@ -193,7 +193,7 @@ func (s service) Initialise() error {
 func createAnnotationRelationship(relation string) (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
-                MERGE (upp:UPPIdentifier{value:{conceptID}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptID}})
                 MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptID}
                 MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
                 SET pred={annProps}
