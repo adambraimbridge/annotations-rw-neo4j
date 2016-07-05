@@ -97,8 +97,16 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
 
+	var deleteStatement string
+
+	if s.platformVersion == "v2" {
+		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	} else {
+		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	}
+
 	query := &neoism.CypherQuery{
-		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`,
+		Statement:    deleteStatement,
 		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
@@ -184,7 +192,8 @@ func (s service) Initialise() error {
 func createAnnotationRelationship(relation string) (statement string) {
 	stmt := `
                 MERGE (content:Thing{uuid:{contentID}})
-                MERGE (concept:Thing{uuid:{conceptID}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptID}})
+                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptID}
                 MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
                 SET pred={annProps}
                 `
@@ -208,7 +217,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		return nil, err
 	}
 
-	//todo temporary chnage to deal with multiple provenances
+	//todo temporary change to deal with multiple provenances
 	/*if len(ann.Provenances) > 1 {
 		return nil, errors.New("Cannot insert a MENTIONS annotation with multiple provenances")
 	}*/
