@@ -59,7 +59,6 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
 					MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
-					MATCH (cc:Thing)
 					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
 					collect(
 						{scores:[
