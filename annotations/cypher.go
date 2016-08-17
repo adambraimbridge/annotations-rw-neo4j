@@ -316,8 +316,10 @@ func extractScores(scores []score) (float64, float64, error) {
 }
 
 func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
-	matchStmtTemplate := `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r {platformVersion:{platformVersion}, lifecycle: {lifecycle}}]->(t:Thing)
-											DELETE r`
+	matchStmtTemplate := `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r {platformVersion:{platformVersion}}]->(t:Thing)
+												WHERE rel.lifecycle = {lifecycle}
+												OR rel.lifecycle IS NULL
+												DELETE r`
 
 	query := neoism.CypherQuery{}
 	query.Statement = matchStmtTemplate
