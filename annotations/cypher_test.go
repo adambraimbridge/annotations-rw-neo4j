@@ -14,12 +14,14 @@ var annotationsDriver service
 
 const (
 	contentUUID       = "32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID       = "412e4ca3-f8d5-4456-8606-064c1dba3c45"
+	conceptUUID       = "a7732a22-3884-4bfe-9761-fef161e41d69"
 	secondConceptUUID = "c834adfa-10c9-4748-8a21-c08537172706"
 	oldConceptUUID    = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
 	brandUUID         = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
 	v2PlatformVersion = "v2"
 	v1PlatformVersion = "v1"
+	contentLifecyle   = "content"
+	annotationsV2     = "annotations-v2"
 )
 
 func getURI(uuid string) string {
@@ -28,7 +30,6 @@ func getURI(uuid string) string {
 
 func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert := assert.New(t)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 
 	annotationsToDelete := annotations{annotation{
@@ -55,8 +56,8 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToDelete)
 
-	found, err := annotationsDriver.Delete(contentUUID)
-	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
+	deleted, err := annotationsDriver.Delete(contentUUID)
+	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotation for content uuid %, conceptUUID %s", contentUUID, conceptUUID)
 
 	anns, found, err := annotationsDriver.Read(contentUUID)
@@ -137,33 +138,14 @@ func TestWriteAllValuesPresent(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationships(t *testing.T) {
+func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifeCycle(t *testing.T) {
 	assert := assert.New(t)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
-
-	createBrandQuery := &neoism.CypherQuery{
-		Statement: `MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing RETURN b.uuid`,
-		Parameters: map[string]interface{}{
-			"brandUuid": brandUUID,
-		},
-	}
-
-	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{createBrandQuery})
-
-	createContentQuery := &neoism.CypherQuery{
-		Statement: `MERGE (c:Content{uuid:{contentUuid}}) SET c :Thing RETURN c.uuid`,
-		Parameters: map[string]interface{}{
-			"contentUuid": contentUUID,
-		},
-	}
-
-	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{createContentQuery})
-
+    defer cleanDB( t, assert)
 	contentQuery := &neoism.CypherQuery{
-		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
-		MERGE (b:Brand{uuid:{brandUuid}})
-		CREATE (n)-[rel:IS_CLASSIFIED_BY{platformVersion:{platformVersion}}]->(b) RETURN rel.platformVersion`,
+		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
+		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
+		CREATE (n)-[rel:IS_CLASSIFIED_BY{platformVersion:{platformVersion}}]->(b)`,
 		Parameters: map[string]interface{}{
 			"contentUuid":     contentUUID,
 			"brandUuid":       brandUUID,
@@ -171,7 +153,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationships(t *testing.T
 		},
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
 
 	annotationsToWrite := annotations{annotation{
 		Thing: thing{ID: getURI(conceptUUID),
@@ -194,8 +176,8 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationships(t *testing.T
 	}}
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
-	found, err := annotationsDriver.Delete(contentUUID)
-	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
+	deleted, err := annotationsDriver.Delete(contentUUID)
+	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
 	result := []struct {
@@ -214,7 +196,70 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationships(t *testing.T
 	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.NotEmpty(result)
+}
 
+
+func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLifeCycle(t *testing.T) {
+	assert := assert.New(t)
+	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
+    //defer cleanDB( t, assert)
+	contentQuery := &neoism.CypherQuery{
+		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
+		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
+		CREATE (n)-[rel:IS_CLASSIFIED_BY{platformVersion:{platformVersion}, lifecycle: {lifecycle}}]->(b)`,
+		Parameters: map[string]interface{}{
+			"contentUuid":     contentUUID,
+			"brandUuid":       brandUUID,
+			"platformVersion": v2PlatformVersion,
+			"lifecycle": contentLifecyle,
+		},
+	}
+
+	err :=annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	assert.NoError(err, "Error c for content uuid %s", contentUUID)
+
+	annotationsToWrite := annotations{annotation{
+		Thing: thing{ID: getURI(conceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			}},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}}
+
+	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+	deleted, err := annotationsDriver.Delete(contentUUID)
+	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
+	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
+
+	result := []struct {
+		Uuid string `json:"b.uuid"`
+	}{}
+
+	getContentQuery := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[:IS_CLASSIFIED_BY]->(b:Brand) RETURN b.uuid`,
+		Parameters: map[string]interface{}{
+			"contentUuid": contentUUID,
+			"brandUuid":   brandUUID,
+		},
+		Result: &result,
+	}
+
+	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+	assert.NoError(readErr)
+	assert.NotEmpty(result)
+	
 	removeRelationshipQuery := &neoism.CypherQuery{
 		Statement: `
 			MATCH (b:Thing {uuid:{brandUuid}})<-[rel:IS_CLASSIFIED_BY]-(t:Thing)
@@ -231,10 +276,12 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationships(t *testing.T
 	assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", brandUUID, err)
 }
 
+
 func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *testing.T) {
 	assert := assert.New(t)
 
 	v1AnnotationsDriver := getAnnotationsService(t, v1PlatformVersion)
+	annotationsDriver := getAnnotationsService(t, v2PlatformVersion)
 
 	createContentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (c:Content{uuid:{contentUuid}}) SET c :Thing RETURN c.uuid`,
@@ -260,8 +307,9 @@ func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *te
 	}
 
 	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	assert.NoError(err, "Error writing annotations for content uuid %s", contentUUID)
 
-	annotationsToWrite := annotations{annotation{
+	 annotationsToWrite := annotations{annotation{
 		Thing: thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
@@ -282,8 +330,8 @@ func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *te
 	}}
 
 	assert.NoError(v1AnnotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
-	found, err := v1AnnotationsDriver.Delete(contentUUID)
-	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
+	deleted, err := v1AnnotationsDriver.Delete(contentUUID)
+	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
 	result := []struct {
@@ -632,6 +680,66 @@ func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
 	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
 }
 
+func writeClassifedByRelationship(db *neoism.Database, contentId string, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) {
+
+	var annotateQuery string
+	var qs []*neoism.CypherQuery
+
+	if lifecycle == "" {
+		annotateQuery = `
+                MERGE (content:Thing{uuid:{contentId}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
+                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
+                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1'}]->(concept)              
+          `
+		qs = []*neoism.CypherQuery{
+			{
+				Statement:  annotateQuery,
+				Parameters: neoism.Props{"contentId": contentId, "conceptId": conceptId},
+			},
+		}
+	} else {
+		annotateQuery = `
+                MERGE (content:Thing{uuid:{contentId}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
+                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
+                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1', lifecycle: {lifecycle}}]->(concept)
+          `
+		qs = []*neoism.CypherQuery{
+			{
+				Statement:  annotateQuery,
+				Parameters: neoism.Props{"contentId": contentId, "conceptId": conceptId, "lifecycle": lifecycle},
+			},
+		}
+
+	}
+
+	err := db.CypherBatch(qs)
+	assert.NoError(err)
+}
+
+func checkClassifedByRelationship(db *neoism.Database, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) int {
+
+	countQuery := `Match (t:Thing{uuid:{conceptId}})-[r:IS_CLASSIFIED_BY {platformVersion:'v1', lifecycle: {lifecycle}}]-(x) return count(r) as c`
+
+	results := []struct {
+		Count int `json:"c"`
+	}{}
+
+	qs := &neoism.CypherQuery{
+		Statement:  countQuery,
+		Parameters: neoism.Props{"conceptId": conceptId, "lifecycle": lifecycle},
+		Result:     &results,
+	}
+
+	err := db.CypherBatch([]*neoism.CypherQuery{qs})
+	assert.NoError(err)
+
+	return results[0].Count
+}
+
+
+
 func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 	assert := assert.New(t)
 	found, err := annotationsDriver.Delete(contentUUID)
@@ -646,6 +754,56 @@ func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 		assert.NoError(err, "Could not delete concept node")
 	}
 }
+
+
+/*func checkDbClean(db *neoism.Database, t *testing.T) {
+	assert := assert.New(t)
+
+	result := []struct {
+		Uuid string `json:"org.uuid"`
+	}{}
+
+	checkGraph := neoism.CypherQuery{
+		Statement: `
+			MATCH (org:Thing) WHERE org.uuid in {uuids} RETURN org.uuid
+		`,
+		Parameters: neoism.Props{
+			"uuids": []string{fullContentUuid, minimalContentUuid},
+		},
+		Result: &result,
+	}
+	err := db.Cypher(&checkGraph)
+	assert.NoError(err)
+	assert.Empty(result)
+}*/
+
+
+func cleanDB( t *testing.T, assert *assert.Assertions) {
+	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
+	qs := []*neoism.CypherQuery{
+		{
+			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", contentUUID),
+		},
+		{
+			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", conceptUUID),
+		},
+		{
+			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", secondConceptUUID),
+		},
+		{
+			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", oldConceptUUID),
+		},
+		{
+			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", brandUUID),
+		},
+	}
+
+	err :=  annotationsDriver.cypherRunner.CypherBatch(qs)
+	assert.NoError(err)
+}
+
+
+
 
 func deleteNode(annotationsDriver service, uuid string) error {
 

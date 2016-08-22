@@ -59,8 +59,6 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
 					MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
-					WHERE rel.lifecycle = {lifecycle}
-					OR rel.lifecycle IS NULL
 					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
 					collect(
 						{scores:[
@@ -74,7 +72,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		Result:     &results,
 	}
 	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
@@ -98,13 +96,18 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //may leave nodes that are only 'things' inserted by this writer: clean up
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
-	deleteStatement := `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
-											WHERE rel.lifecycle = {lifecycle}
-											OR rel.lifecycle IS NULL
-	 										DELETE rel`
+
+	var deleteStatement string
+
+	if s.platformVersion == "v2" {
+		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	} else {
+		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	}
+
 	query := &neoism.CypherQuery{
 		Statement:    deleteStatement,
-		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
+		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
 
@@ -115,12 +118,7 @@ func (s service) Delete(contentUUID string) (bool, error) {
 		return false, err
 	}
 
-	var found bool
-	if stats.ContainsUpdates {
-		found = true
-	}
-
-	return found, err
+	return stats.ContainsUpdates, err
 }
 
 //Write a set of annotations associated with a piece of content. Any annotations
@@ -169,8 +167,8 @@ func (s service) Count() (int, error) {
 
 	query := &neoism.CypherQuery{
 		Statement: `MATCH ()-[r{platformVersion:{platformVersion}}]->()
-								WHERE rel.lifecycle = {lifecycle}
-								OR rel.lifecycle IS NULL
+								WHERE r.lifecycle = {lifecycle}
+								OR r.lifecycle IS NULL
 								RETURN count(r) as c`,
 		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
 		Result:     &results,
@@ -316,14 +314,25 @@ func extractScores(scores []score) (float64, float64, error) {
 }
 
 func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
-	matchStmtTemplate := `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r {platformVersion:{platformVersion}}]->(t:Thing)
-												WHERE rel.lifecycle = {lifecycle}
-												OR rel.lifecycle IS NULL
-												DELETE r`
+
+	var matchStmtTemplate string
+
+	//TODO hard-coded verification:
+	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
+	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
+	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
+	if platformVersion == "v2" {
+		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
+                        DELETE r`
+	} else {
+		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+			WHERE r.platformVersion={platformVersion}
+                        DELETE r`
+	}
 
 	query := neoism.CypherQuery{}
 	query.Statement = matchStmtTemplate
-	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion, "lifecycle": "annotations-" + platformVersion}
+	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion}
 	return &query
 }
 
