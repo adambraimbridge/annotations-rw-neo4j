@@ -89,7 +89,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 		mapToResponseFormat(&results[idx])
 	}
 
-	return results, true, nil
+	return annotations(results), true, nil
 }
 
 //Delete removes all the annotations for this content. Ignore the nodes on either end -

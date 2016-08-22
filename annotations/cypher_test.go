@@ -619,7 +619,7 @@ func getAnnotationsService(t *testing.T, platformVersion string) service {
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {
 	assert := assert.New(t)
 	storedThings, found, err := annotationsDriver.Read(contentUUID)
-	storedAnnotations := storedThings.([]annotation)
+	storedAnnotations := storedThings.(annotations)
 
 	assert.NoError(err, "Error finding annotations for contentUUID %s", contentUUID)
 	assert.True(found, "Didn't find annotations for contentUUID %s", contentUUID)
