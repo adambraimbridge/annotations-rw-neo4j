@@ -141,7 +141,7 @@ func TestWriteAllValuesPresent(t *testing.T) {
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifeCycle(t *testing.T) {
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
-    defer cleanDB( t, assert)
+	defer cleanDB(t, assert)
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
 		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
@@ -198,11 +198,10 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifeCy
 	assert.NotEmpty(result)
 }
 
-
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLifeCycle(t *testing.T) {
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
-    //defer cleanDB( t, assert)
+	//defer cleanDB( t, assert)
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
 		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
@@ -211,11 +210,11 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 			"contentUuid":     contentUUID,
 			"brandUuid":       brandUUID,
 			"platformVersion": v2PlatformVersion,
-			"lifecycle": contentLifecyle,
+			"lifecycle":       contentLifecyle,
 		},
 	}
 
-	err :=annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
 	assert.NoError(err, "Error c for content uuid %s", contentUUID)
 
 	annotationsToWrite := annotations{annotation{
@@ -259,7 +258,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.NotEmpty(result)
-	
+
 	removeRelationshipQuery := &neoism.CypherQuery{
 		Statement: `
 			MATCH (b:Thing {uuid:{brandUuid}})<-[rel:IS_CLASSIFIED_BY]-(t:Thing)
@@ -275,7 +274,6 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 	err = deleteNode(annotationsDriver, brandUUID)
 	assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", brandUUID, err)
 }
-
 
 func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *testing.T) {
 	assert := assert.New(t)
@@ -309,7 +307,7 @@ func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *te
 	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
 	assert.NoError(err, "Error writing annotations for content uuid %s", contentUUID)
 
-	 annotationsToWrite := annotations{annotation{
+	annotationsToWrite := annotations{annotation{
 		Thing: thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
@@ -690,7 +688,7 @@ func writeClassifedByRelationship(db *neoism.Database, contentId string, concept
                 MERGE (content:Thing{uuid:{contentId}})
                 MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
                 MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
-                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1'}]->(concept)              
+                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1'}]->(concept)
           `
 		qs = []*neoism.CypherQuery{
 			{
@@ -738,8 +736,6 @@ func checkClassifedByRelationship(db *neoism.Database, conceptId string, lifecyc
 	return results[0].Count
 }
 
-
-
 func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 	assert := assert.New(t)
 	found, err := annotationsDriver.Delete(contentUUID)
@@ -754,7 +750,6 @@ func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 		assert.NoError(err, "Could not delete concept node")
 	}
 }
-
 
 /*func checkDbClean(db *neoism.Database, t *testing.T) {
 	assert := assert.New(t)
@@ -777,8 +772,7 @@ func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 	assert.Empty(result)
 }*/
 
-
-func cleanDB( t *testing.T, assert *assert.Assertions) {
+func cleanDB(t *testing.T, assert *assert.Assertions) {
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 	qs := []*neoism.CypherQuery{
 		{
@@ -798,12 +792,9 @@ func cleanDB( t *testing.T, assert *assert.Assertions) {
 		},
 	}
 
-	err :=  annotationsDriver.cypherRunner.CypherBatch(qs)
+	err := annotationsDriver.cypherRunner.CypherBatch(qs)
 	assert.NoError(err)
 }
-
-
-
 
 func deleteNode(annotationsDriver service, uuid string) error {
 
