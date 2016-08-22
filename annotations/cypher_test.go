@@ -201,7 +201,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifeCy
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLifeCycle(t *testing.T) {
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
-	//defer cleanDB( t, assert)
+	defer cleanDB(t, assert)
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
 		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
