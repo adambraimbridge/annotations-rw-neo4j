@@ -55,7 +55,6 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToDelete), "Failed to write annotation")
 
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToDelete)
-	checkRelationship(assert, contentUUID, "v2")
 
 	deleted, err := annotationsDriver.Delete(contentUUID)
 	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
@@ -177,6 +176,8 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifeCy
 	}}
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+	checkRelationship(assert, contentUUID, "v2")
+
 	deleted, err := annotationsDriver.Delete(contentUUID)
 	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
