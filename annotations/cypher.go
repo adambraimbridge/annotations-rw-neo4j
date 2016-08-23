@@ -192,7 +192,7 @@ func createAnnotationRelationship(relation string) (statement string) {
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (upp:Identifier:UPPIdentifier{value:{conceptID}})
                 MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptID}
-                MERGE (content)-[pred:%s {platformVersion:{platformVersion}, lifecycle: {lifecycle}}]->(concept)
+                MERGE (content)-[pred:%s {platformVersion:{platformVersion}}]->(concept)
                 SET pred={annProps}
           `
 	statement = fmt.Sprintf(stmt, relation)
@@ -223,6 +223,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	var prov provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
+	params["lifecycle"] = "annotations-" + platformVersion
 
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
@@ -252,7 +253,6 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		"contentID":       contentUUID,
 		"conceptID":       thingID,
 		"platformVersion": platformVersion,
-		"lifecycle":       "annotations-" + platformVersion,
 		"annProps":        params,
 	}
 	return &query, nil
@@ -323,11 +323,11 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
 	if platformVersion == "v2" {
 		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
-                        DELETE r`
+                         DELETE r`
 	} else {
 		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-			WHERE r.platformVersion={platformVersion}
-                        DELETE r`
+												    WHERE r.platformVersion={platformVersion}
+                         DELETE r`
 	}
 
 	query := neoism.CypherQuery{}

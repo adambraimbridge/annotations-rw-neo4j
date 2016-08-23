@@ -55,6 +55,7 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToDelete), "Failed to write annotation")
 
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToDelete)
+	checkRelationship(assert, contentUUID, "v2")
 
 	deleted, err := annotationsDriver.Delete(contentUUID)
 	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
@@ -73,7 +74,6 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert.NoError(err, "Error trying to delete content node with uuid %s, err=%v", contentUUID, err)
 	err = deleteNode(annotationsDriver, conceptUUID)
 	assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", conceptUUID, err)
-
 }
 
 func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
@@ -702,9 +702,8 @@ func writeClassifedByRelationship(db *neoism.Database, contentId string, concept
 	assert.NoError(err)
 }
 
-func checkClassifedByRelationship(db *neoism.Database, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) int {
-
-	countQuery := `Match (t:Thing{uuid:{conceptId}})-[r:IS_CLASSIFIED_BY {platformVersion:'v1', lifecycle: {lifecycle}}]-(x) return count(r) as c`
+func checkRelationship(assert *assert.Assertions, contentID string, platformVersion string) {
+	countQuery := `Match (t:Thing {uuid: {contentID}})-[r {lifecycle: {lifecycle}}]-(x) return count(r) as c`
 
 	results := []struct {
 		Count int `json:"c"`
@@ -712,14 +711,14 @@ func checkClassifedByRelationship(db *neoism.Database, conceptId string, lifecyc
 
 	qs := &neoism.CypherQuery{
 		Statement:  countQuery,
-		Parameters: neoism.Props{"conceptId": conceptId, "lifecycle": lifecycle},
+		Parameters: neoism.Props{"contentID": contentID, "lifecycle": "annotations-" + platformVersion},
 		Result:     &results,
 	}
 
-	err := db.CypherBatch([]*neoism.CypherQuery{qs})
+	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{qs})
 	assert.NoError(err)
-
-	return results[0].Count
+	assert.Equal(1, len(results), "More results found than expected!")
+	assert.Equal(1, results[0].Count, "No Relationship with Lifecycle found!")
 }
 
 func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
