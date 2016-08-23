@@ -142,6 +142,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifeCy
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 	defer cleanDB(t, assert)
+
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
 		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
@@ -258,21 +259,6 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.NotEmpty(result)
-
-	removeRelationshipQuery := &neoism.CypherQuery{
-		Statement: `
-			MATCH (b:Thing {uuid:{brandUuid}})<-[rel:IS_CLASSIFIED_BY]-(t:Thing)
-			DELETE rel
-		`,
-		Parameters: map[string]interface{}{
-			"brandUuid": brandUUID,
-		},
-	}
-
-	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{removeRelationshipQuery})
-
-	err = deleteNode(annotationsDriver, brandUUID)
-	assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", brandUUID, err)
 }
 
 func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *testing.T) {
