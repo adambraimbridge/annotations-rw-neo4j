@@ -110,12 +110,7 @@ func (s service) Delete(contentUUID string) (bool, error) {
 		return false, err
 	}
 
-	var found bool
-	if stats.ContainsUpdates {
-		found = true
-	}
-
-	return found, err
+	return stats.ContainsUpdates, err
 }
 
 //Write a set of annotations associated with a piece of content. Any annotations
@@ -163,8 +158,11 @@ func (s service) Count() (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement:  `MATCH ()-[r{platformVersion:{platformVersion}}]->() RETURN count(r) as c`,
-		Parameters: neoism.Props{"platformVersion": s.platformVersion},
+		Statement: `MATCH ()-[r{platformVersion:{platformVersion}}]->()
+								 WHERE r.lifecycle = {lifecycle}
+								 OR r.lifecycle IS NULL
+								 RETURN count(r) as c`,
+		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
 		Result:     &results,
 	}
 
@@ -216,6 +214,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	var prov provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
+	params["lifecycle"] = "annotations-" + platformVersion
 
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
@@ -309,7 +308,8 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 
 	var matchStmtTemplate string
 
-	//TODO hard-coded verification:
+	// TODO hard-coded verification:
+	// WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
 	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
 	if platformVersion == "v2" {
