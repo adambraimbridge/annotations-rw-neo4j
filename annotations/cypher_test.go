@@ -737,27 +737,6 @@ func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 	}
 }
 
-/*func checkDbClean(db *neoism.Database, t *testing.T) {
-	assert := assert.New(t)
-
-	result := []struct {
-		Uuid string `json:"org.uuid"`
-	}{}
-
-	checkGraph := neoism.CypherQuery{
-		Statement: `
-			MATCH (org:Thing) WHERE org.uuid in {uuids} RETURN org.uuid
-		`,
-		Parameters: neoism.Props{
-			"uuids": []string{fullContentUuid, minimalContentUuid},
-		},
-		Result: &result,
-	}
-	err := db.Cypher(&checkGraph)
-	assert.NoError(err)
-	assert.Empty(result)
-}*/
-
 func cleanDB(t *testing.T, assert *assert.Assertions) {
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 	qs := []*neoism.CypherQuery{
