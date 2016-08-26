@@ -168,7 +168,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 	assert.NotEmpty(result)
 }
 
-func TestWriteDoesRemoveExistingIsClassifedForV1TermsAndTheirRelationships(t *testing.T) {
+func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *testing.T) {
 	assert := assert.New(t)
 
 	v1AnnotationsDriver := getAnnotationsService(t, v1PlatformVersion)
