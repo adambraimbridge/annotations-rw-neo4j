@@ -159,9 +159,9 @@ func (s service) Count() (int, error) {
 
 	query := &neoism.CypherQuery{
 		Statement: `MATCH ()-[r{platformVersion:{platformVersion}}]->()
-								 WHERE r.lifecycle = {lifecycle}
-								 OR r.lifecycle IS NULL
-								 RETURN count(r) as c`,
+                WHERE r.lifecycle = {lifecycle}
+                OR r.lifecycle IS NULL
+                RETURN count(r) as c`,
 		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
 		Result:     &results,
 	}
@@ -181,11 +181,11 @@ func (s service) Initialise() error {
 
 func createAnnotationRelationship(relation string) (statement string) {
 	stmt := `
-                MERGE (content:Thing{uuid:{contentID}})
-                MERGE (concept:Thing{uuid:{conceptID}})
-                MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
-                SET pred={annProps}
-                `
+            MERGE (content:Thing{uuid:{contentID}})
+            MERGE (concept:Thing{uuid:{conceptID}})
+            MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
+            SET pred={annProps}
+          `
 	statement = fmt.Sprintf(stmt, relation)
 	return statement
 }
@@ -309,16 +309,16 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 	var matchStmtTemplate string
 
 	// TODO hard-coded verification:
-	// WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
+	// WE STILL NEED THIS UNTIL EVERYTHING HAS A LIFECYCLE PROPERTY!
 	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
 	if platformVersion == "v2" {
 		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
-                        DELETE r`
+                         DELETE r`
 	} else {
 		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-			WHERE r.platformVersion={platformVersion}
-                        DELETE r`
+                         WHERE r.platformVersion={platformVersion}
+                         DELETE r`
 	}
 
 	query := neoism.CypherQuery{}
