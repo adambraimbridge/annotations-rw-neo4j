@@ -84,7 +84,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 	defer cleanDB(t, assert)
 
-	contentQuery := &neoism.CypherQuery{
+	testSetupQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
 		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
 		CREATE (n)-[rel:IS_CLASSIFIED_BY{platformVersion:{platformVersion}}]->(b)`,
@@ -95,7 +95,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 		},
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{testSetupQuery})
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
