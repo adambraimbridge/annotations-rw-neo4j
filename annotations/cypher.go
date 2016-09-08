@@ -166,10 +166,10 @@ func (s service) Count() (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH ()-[r{platformVersion:{platformVersion}}]->()
-								WHERE r.lifecycle = {lifecycle}
-								OR r.lifecycle IS NULL
-								RETURN count(r) as c`,
+		Statement: `	MATCH ()-[r{platformVersion:{platformVersion}}]->()
+			 	WHERE r.lifecycle = {lifecycle}
+				OR r.lifecycle IS NULL
+				RETURN count(r) as c`,
 		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
 		Result:     &results,
 	}
@@ -322,12 +322,12 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
 	if platformVersion == "v2" {
-		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
-                         DELETE r`
+		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
+                         		DELETE r`
 	} else {
-		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-												    WHERE r.platformVersion={platformVersion}
-                         DELETE r`
+		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+					WHERE r.platformVersion={platformVersion}
+                         		DELETE r`
 	}
 
 	query := neoism.CypherQuery{}
