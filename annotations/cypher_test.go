@@ -411,7 +411,7 @@ func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
 	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
 }
 
-func writeClassifedByRelationship(db *neoism.Database, contentId string, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) {
+func writeClassifedByRelationship(db neoutils.CypherRunner, contentId string, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) {
 
 	var annotateQuery string
 	var qs []*neoism.CypherQuery
