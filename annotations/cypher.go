@@ -166,10 +166,10 @@ func (s service) Count() (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `	MATCH ()-[r{platformVersion:{platformVersion}}]->()
-			 	WHERE r.lifecycle = {lifecycle}
-				OR r.lifecycle IS NULL
-				RETURN count(r) as c`,
+		Statement: `MATCH ()-[r{platformVersion:{platformVersion}}]->()
+                WHERE r.lifecycle = {lifecycle}
+                OR r.lifecycle IS NULL
+                RETURN count(r) as c`,
 		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
 		Result:     &results,
 	}
