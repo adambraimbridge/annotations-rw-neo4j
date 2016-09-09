@@ -344,9 +344,12 @@ func getAnnotationsService(t *testing.T, platformVersion string) service {
 		url = "http://localhost:7474/db/data"
 	}
 
-	db, err := neoism.Connect(url)
+
+	conf := neoutils.DefaultConnectionConfig()
+	conf.Transactional = false
+	db, err := neoutils.Connect(url, conf)
 	assert.NoError(err, "Failed to connect to Neo4j")
-	return NewAnnotationsService(neoutils.StringerDb{db}, db, platformVersion)
+	return NewCypherAnnotationsService(db, platformVersion)
 }
 
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {

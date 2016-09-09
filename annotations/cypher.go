@@ -33,17 +33,16 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	cypherRunner    neoutils.CypherRunner
-	indexManager    neoutils.IndexManager
+	cypherRunner neoutils.NeoConnection
 	platformVersion string
 }
 
-//NewAnnotationsService instantiate driver
-func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager, platformVersion string) service {
+//NewCypherAnnotationsService instantiate driver
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection,  platformVersion string) service {
 	if platformVersion == "" {
 		log.Fatalf("PlatformVersion was not specified!")
 	}
-	return service{cypherRunner, indexManager, platformVersion}
+	return service{cypherRunner, platformVersion}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
