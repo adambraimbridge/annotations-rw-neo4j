@@ -33,7 +33,7 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	cypherRunner neoutils.NeoConnection
+	conn  neoutils.NeoConnection
 	platformVersion string
 }
 
@@ -74,7 +74,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		Result:     &results,
 	}
-	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
 		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v", contentUUID, query.Statement, err)
 		return annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
@@ -110,7 +110,7 @@ func (s service) Delete(contentUUID string) (bool, error) {
 		IncludeStats: true,
 	}
 
-	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	stats, err := query.Stats()
 	if err != nil {
@@ -151,12 +151,12 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 	log.Infof("Updated Annotations for content uuid: %s", contentUUID)
 	log.Debugf("For update, ran statements: %+v", statements)
 
-	return s.cypherRunner.CypherBatch(queries)
+	return s.conn.CypherBatch(queries)
 }
 
 // Check tests neo4j by running a simple cypher query
 func (s service) Check() error {
-	return neoutils.Check(s.cypherRunner)
+	return neoutils.Check(s.conn)
 }
 
 func (s service) Count() (int, error) {
@@ -173,7 +173,7 @@ func (s service) Count() (int, error) {
 		Result:     &results,
 	}
 
-	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	if err != nil {
 		return 0, err
