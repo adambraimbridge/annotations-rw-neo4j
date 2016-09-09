@@ -20,7 +20,7 @@ const (
 	brandUUID         = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
 	v2PlatformVersion = "v2"
 	v1PlatformVersion = "v1"
-	contentLifecyle   = "content"
+	contentLifecycle = "content"
 	annotationsV2     = "annotations-v2"
 )
 
@@ -135,7 +135,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 			"contentUuid":     contentUUID,
 			"brandUuid":       brandUUID,
 			"platformVersion": v2PlatformVersion,
-			"lifecycle":       contentLifecyle,
+			"lifecycle":       contentLifecycle,
 
 		},
 	}
@@ -349,6 +349,7 @@ func getAnnotationsService(t *testing.T, platformVersion string) service {
 	conf.Transactional = false
 	db, err := neoutils.Connect(url, conf)
 	assert.NoError(err, "Failed to connect to Neo4j")
+
 	return NewCypherAnnotationsService(db, platformVersion)
 }
 
