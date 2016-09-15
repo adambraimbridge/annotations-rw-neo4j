@@ -16,7 +16,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
-	"github.com/jmcvetta/neoism"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -38,8 +37,10 @@ func main() {
 	app.Action = func() {
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
 
-		db, err := neoism.Connect(*neoURL)
-		db.Session.Client = &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 100}}
+		conf := neoutils.DefaultConnectionConfig()
+		conf.BatchSize = *batchSize
+		db, err := neoutils.Connect(*neoURL, conf)
+
 		if err != nil {
 			log.Fatalf("Error connecting to neo4j %s", err)
 		}
@@ -55,8 +56,8 @@ func main() {
 
 			defer f.Close()
 		}
-		batchRunner := neoutils.NewBatchCypherRunner(neoutils.StringerDb{db}, *batchSize)
-		httpHandlers := httpHandlers{annotations.NewAnnotationsService(batchRunner, db, *platformVersion)}
+		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion)
+		httpHandlers := httpHandlers{annotationsService}
 
 		// don't want to monitor or log these endpoints, they are called a lot
 		http.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)

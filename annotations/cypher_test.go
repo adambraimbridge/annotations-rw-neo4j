@@ -20,7 +20,7 @@ const (
 	brandUUID         = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
 	v2PlatformVersion = "v2"
 	v1PlatformVersion = "v1"
-	contentLifecycle  = "content"
+	contentLifecycle = "content"
 	annotationsV2     = "annotations-v2"
 )
 
@@ -36,8 +36,8 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToDelete), "Failed to write annotation")
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToDelete)
 
-	found, err := annotationsDriver.Delete(contentUUID)
-	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
+	deleted, err := annotationsDriver.Delete(contentUUID)
+	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotation for content uuid %, conceptUUID %s", contentUUID, conceptUUID)
 
 	anns, found, err := annotationsDriver.Read(contentUUID)
@@ -78,9 +78,9 @@ func TestWriteAllValuesPresent(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
+
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecycle(t *testing.T) {
 	assert := assert.New(t)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
 	defer cleanDB(t, assert)
 
@@ -95,7 +95,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 		},
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{testSetupQuery})
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{testSetupQuery})
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
@@ -118,7 +118,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 		Result: &result,
 	}
 
-	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+	readErr := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.NotEmpty(result)
 }
@@ -136,11 +136,13 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 			"brandUuid":       brandUUID,
 			"platformVersion": v2PlatformVersion,
 			"lifecycle":       contentLifecycle,
+
 		},
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
 	assert.NoError(err, "Error c for content uuid %s", contentUUID)
+
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
 	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
@@ -163,7 +165,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 		Result: &result,
 	}
 
-	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+	readErr := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.NotEmpty(result)
 }
@@ -172,6 +174,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 	assert := assert.New(t)
 
 	v1AnnotationsDriver := getAnnotationsService(t, v1PlatformVersion)
+	annotationsDriver := getAnnotationsService(t, v2PlatformVersion)
 
 	createContentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (c:Content{uuid:{contentUuid}}) SET c :Thing RETURN c.uuid`,
@@ -180,7 +183,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		},
 	}
 
-	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{createContentQuery})
+	annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{createContentQuery})
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
@@ -196,7 +199,8 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		},
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
+
 	assert.NoError(v1AnnotationsDriver.Write(contentUUID, exampleConcepts(conceptUUID)), "Failed to write annotation")
 	found, err := v1AnnotationsDriver.Delete(contentUUID)
 	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
@@ -216,7 +220,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		Result: &result,
 	}
 
-	readErr := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+	readErr := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.Empty(result)
 
@@ -230,7 +234,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		Result: &result,
 	}
 
-	readErr = annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+	readErr = annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
 	assert.NoError(readErr)
 	assert.NotEmpty(result)
 
@@ -246,7 +250,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		},
 	}
 
-	annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{removeRelationshipQuery})
+	annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{removeRelationshipQuery})
 
 	err = deleteNode(annotationsDriver, brandUUID)
 	assert.NoError(err, "Error trying to delete concept node with uuid %s, err=%v", brandUUID, err)
@@ -340,15 +344,19 @@ func getAnnotationsService(t *testing.T, platformVersion string) service {
 		url = "http://localhost:7474/db/data"
 	}
 
-	db, err := neoism.Connect(url)
+
+	conf := neoutils.DefaultConnectionConfig()
+	conf.Transactional = false
+	db, err := neoutils.Connect(url, conf)
 	assert.NoError(err, "Failed to connect to Neo4j")
-	return NewAnnotationsService(neoutils.StringerDb{db}, db, platformVersion)
+
+	return NewCypherAnnotationsService(db, platformVersion)
 }
 
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {
 	assert := assert.New(t)
 	storedThings, found, err := annotationsDriver.Read(contentUUID)
-	storedAnnotations := storedThings.([]annotation)
+	storedAnnotations := storedThings.(annotations)
 
 	assert.NoError(err, "Error finding annotations for contentUUID %s", contentUUID)
 	assert.True(found, "Didn't find annotations for contentUUID %s", contentUUID)
@@ -361,25 +369,6 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 		// be present UNLESS the concept has been written by some other system)
 		assert.Equal(expectedAnnotation.Thing.ID, storedAnnotation.Thing.ID, "Thing ID not the same")
 	}
-}
-
-func checkRelationship(assert *assert.Assertions, contentID string, platformVersion string) {
-	countQuery := `Match (t:Thing {uuid: {contentID}})-[r {lifecycle: {lifecycle}}]-(x) return count(r) as c`
-
-	results := []struct {
-		Count int `json:"c"`
-	}{}
-
-	qs := &neoism.CypherQuery{
-		Statement:  countQuery,
-		Parameters: neoism.Props{"contentID": contentID, "lifecycle": "annotations-" + platformVersion},
-		Result:     &results,
-	}
-
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{qs})
-	assert.NoError(err)
-	assert.Equal(1, len(results), "More results found than expected!")
-	assert.Equal(1, results[0].Count, "No Relationship with Lifecycle found!")
 }
 
 func checkNodeIsStillPresent(uuid string, t *testing.T) {
@@ -398,10 +387,89 @@ func checkNodeIsStillPresent(uuid string, t *testing.T) {
 		Result: &results,
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{query})
 	assert.NoError(err, "UnexpectedError")
 	assert.True(len(results) == 1, "Didn't find a node")
 	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
+}
+
+func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
+	assert := assert.New(t)
+	annotationsDriver = getAnnotationsService(t, v2PlatformVersion)
+	results := []struct {
+		UUID string `json:"uuid"`
+	}{}
+
+	query := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing)<-[IDENTIFIER]-(upp:UPPIdentifier{value:{uuid}}) return n.uuid
+		as uuid`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+		Result: &results,
+	}
+
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{query})
+	assert.NoError(err, "UnexpectedError")
+	assert.True(len(results) == 1, "Didn't find a node")
+	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
+}
+
+func writeClassifedByRelationship(db neoutils.CypherRunner, contentId string, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) {
+
+	var annotateQuery string
+	var qs []*neoism.CypherQuery
+
+	if lifecycle == "" {
+		annotateQuery = `
+                MERGE (content:Thing{uuid:{contentId}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
+                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
+                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1'}]->(concept)
+          `
+		qs = []*neoism.CypherQuery{
+			{
+				Statement:  annotateQuery,
+				Parameters: neoism.Props{"contentId": contentId, "conceptId": conceptId},
+			},
+		}
+	} else {
+		annotateQuery = `
+                MERGE (content:Thing{uuid:{contentId}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
+                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
+                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1', lifecycle: {lifecycle}}]->(concept)
+          `
+		qs = []*neoism.CypherQuery{
+			{
+				Statement:  annotateQuery,
+				Parameters: neoism.Props{"contentId": contentId, "conceptId": conceptId, "lifecycle": lifecycle},
+			},
+		}
+
+	}
+
+	err := db.CypherBatch(qs)
+	assert.NoError(err)
+}
+
+func checkRelationship(assert *assert.Assertions, contentID string, platformVersion string) {
+	countQuery := `Match (t:Thing {uuid: {contentID}})-[r {lifecycle: {lifecycle}}]-(x) return count(r) as c`
+
+	results := []struct {
+		Count int `json:"c"`
+	}{}
+
+	qs := &neoism.CypherQuery{
+		Statement:  countQuery,
+		Parameters: neoism.Props{"contentID": contentID, "lifecycle": "annotations-" + platformVersion},
+		Result:     &results,
+	}
+
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{qs})
+	assert.NoError(err)
+	assert.Equal(1, len(results), "More results found than expected!")
+	assert.Equal(1, results[0].Count, "No Relationship with Lifecycle found!")
 }
 
 func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
@@ -439,7 +507,7 @@ func cleanDB(t *testing.T, assert *assert.Assertions) {
 		},
 	}
 
-	err := annotationsDriver.cypherRunner.CypherBatch(qs)
+	err := annotationsDriver.conn.CypherBatch(qs)
 	assert.NoError(err)
 }
 
@@ -448,12 +516,13 @@ func deleteNode(annotationsDriver service, uuid string) error {
 	query := &neoism.CypherQuery{
 		Statement: `
 			MATCH (p:Thing {uuid: {uuid}})
-			DELETE p
+			OPTIONAL MATCH (identifier:UPPIdentifier)-[rel:IDENTIFIES]->(p)
+			DELETE identifier, rel, p
 		`,
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
 	}
 
-	return annotationsDriver.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	return annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{query})
 }

@@ -33,17 +33,16 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	cypherRunner    neoutils.CypherRunner
-	indexManager    neoutils.IndexManager
+	conn  neoutils.NeoConnection
 	platformVersion string
 }
 
-//NewAnnotationsService instantiate driver
-func NewAnnotationsService(cypherRunner neoutils.CypherRunner, indexManager neoutils.IndexManager, platformVersion string) service {
+//NewCypherAnnotationsService instantiate driver
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection,  platformVersion string) service {
 	if platformVersion == "" {
 		log.Fatalf("PlatformVersion was not specified!")
 	}
-	return service{cypherRunner, indexManager, platformVersion}
+	return service{cypherRunner, platformVersion}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
@@ -75,7 +74,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		Result:     &results,
 	}
-	err = s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
 		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v", contentUUID, query.Statement, err)
 		return annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
@@ -89,7 +88,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 		mapToResponseFormat(&results[idx])
 	}
 
-	return results, true, nil
+	return annotations(results), true, nil
 }
 
 //Delete removes all the annotations for this content. Ignore the nodes on either end -
@@ -97,13 +96,21 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
 
+	var deleteStatement string
+
+	if s.platformVersion == "v2" {
+		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	} else {
+		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	}
+
 	query := &neoism.CypherQuery{
-		Statement:    `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`,
+		Statement:    deleteStatement,
 		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
 		IncludeStats: true,
 	}
 
-	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	stats, err := query.Stats()
 	if err != nil {
@@ -144,12 +151,12 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 	log.Infof("Updated Annotations for content uuid: %s", contentUUID)
 	log.Debugf("For update, ran statements: %+v", statements)
 
-	return s.cypherRunner.CypherBatch(queries)
+	return s.conn.CypherBatch(queries)
 }
 
 // Check tests neo4j by running a simple cypher query
 func (s service) Check() error {
-	return neoutils.Check(s.cypherRunner)
+	return neoutils.Check(s.conn)
 }
 
 func (s service) Count() (int, error) {
@@ -166,7 +173,7 @@ func (s service) Count() (int, error) {
 		Result:     &results,
 	}
 
-	err := s.cypherRunner.CypherBatch([]*neoism.CypherQuery{query})
+	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	if err != nil {
 		return 0, err
@@ -181,10 +188,11 @@ func (s service) Initialise() error {
 
 func createAnnotationRelationship(relation string) (statement string) {
 	stmt := `
-            MERGE (content:Thing{uuid:{contentID}})
-            MERGE (concept:Thing{uuid:{conceptID}})
-            MERGE (content)-[pred:%s{platformVersion:{platformVersion}}]->(concept)
-            SET pred={annProps}
+                MERGE (content:Thing{uuid:{contentID}})
+                MERGE (upp:Identifier:UPPIdentifier{value:{conceptID}})
+                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptID}
+                MERGE (content)-[pred:%s {platformVersion:{platformVersion}}]->(concept)
+                SET pred={annProps}
           `
 	statement = fmt.Sprintf(stmt, relation)
 	return statement
@@ -206,7 +214,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		return nil, err
 	}
 
-	//todo temporary chnage to deal with multiple provenances
+	//todo temporary change to deal with multiple provenances
 	/*if len(ann.Provenances) > 1 {
 		return nil, errors.New("Cannot insert a MENTIONS annotation with multiple provenances")
 	}*/
@@ -308,17 +316,17 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 
 	var matchStmtTemplate string
 
-	// TODO hard-coded verification:
-	// WE STILL NEED THIS UNTIL EVERYTHING HAS A LIFECYCLE PROPERTY!
+	//TODO hard-coded verification:
+	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
 	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
 	if platformVersion == "v2" {
-		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
-                         DELETE r`
+		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
+                         		DELETE r`
 	} else {
-		matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-                         WHERE r.platformVersion={platformVersion}
-                         DELETE r`
+		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+					WHERE r.platformVersion={platformVersion}
+                         		DELETE r`
 	}
 
 	query := neoism.CypherQuery{}
