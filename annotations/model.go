@@ -42,4 +42,5 @@ var relations = map[string]string{
 	"isClassifiedBy":          "IS_CLASSIFIED_BY",
 	"about":                   "ABOUT",
 	"isPrimarilyClassifiedBy": "IS_PRIMARILY_CLASSIFIED_BY",
+	"majorMentions":           "MAJOR_MENTIONS",
 }
