@@ -5,13 +5,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"strings"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
+	"github.com/Financial-Times/service-status-go/gtg"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -21,7 +21,7 @@ import (
 
 func main() {
 
-	app :=  cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
+	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neo-url",
 		Value:  "http://localhost:7474/db/data",
@@ -58,11 +58,6 @@ func main() {
 		Desc:   "Whether to log metrics. Set to true if running locally and you want metrics output",
 		EnvVar: "LOG_METRICS",
 	})
-	env := app.String(cli.StringOpt{
-		Name:  "env",
-		Value: "local",
-		Desc:  "environment this app is running in",
-	})
 	logLevel := app.String(cli.StringOpt{
 		Name:   "log-level",
 		Value:  "INFO",
@@ -77,6 +72,12 @@ func main() {
 	})
 
 	app.Action = func() {
+		parsedLogLevel, err := log.ParseLevel(*logLevel)
+		if err != nil {
+			log.WithFields(log.Fields{"logLevel": logLevel, "err": err}).Fatal("Incorrect log level")
+		}
+		log.SetLevel(parsedLogLevel)
+
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
 
 		conf := neoutils.DefaultConnectionConfig()
@@ -87,40 +88,36 @@ func main() {
 			log.Fatalf("Error connecting to neo4j %s", err)
 		}
 
-		if *env != "local" {
-			f, err := os.OpenFile("/var/log/apps/annotations-rw-neo4j-go-app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
-			if err == nil {
-				log.SetOutput(f)
-				log.SetFormatter(&log.TextFormatter{})
-			} else {
-				log.Fatalf("Failed to initialise log file, %v", err)
-			}
-
-			defer f.Close()
-		}
 		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion)
 		httpHandlers := httpHandlers{annotationsService}
 
-		// don't want to monitor or log these endpoints, they are called a lot
+		// Healthchecks and standards first
+		http.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
+			"Checks for accessing neo4j", httpHandlers.HealthCheck()))
+		http.HandleFunc(status.PingPath, status.PingHandler)
+		http.HandleFunc(status.PingPathDW, status.PingHandler)
 		http.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
 		http.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
 
+		gtgChecker := make([]gtg.StatusChecker, 0)
+		gtgChecker = append(gtgChecker, func() gtg.Status {
+			if err := httpHandlers.AnnotationsService.Check(); err != nil {
+				return gtg.Status{GoodToGo: false, Message: err.Error()}
+			}
+
+			return gtg.Status{GoodToGo: true}
+		})
+		http.HandleFunc(status.GTGPath, status.NewGoodToGoHandler(gtg.FailFastParallelCheck(gtgChecker)))
+
 		r := router(httpHandlers)
 		http.Handle("/", r)
+		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
 			log.Fatalf("Unable to start server: %v", err)
 		}
 
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port),
-			httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
-				httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), r))); err != nil {
-			log.Fatalf("Unable to start server: %v", err)
-		}
-		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-
 	}
-	setLogLevel(strings.ToUpper(*logLevel))
 	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
 }
@@ -128,13 +125,6 @@ func main() {
 func router(hh httpHandlers) http.Handler {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
-
-	// Healthchecks and standards first
-	servicesRouter.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
-		"Checks for accessing neo4j", hh.HealthCheck()))
-	servicesRouter.HandleFunc(status.PingPath, status.PingHandler)
-	servicesRouter.HandleFunc(status.PingPathDW, status.PingHandler)
-
 	// Then API specific ones:
 	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.GetAnnotations).Methods("GET")
 	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
@@ -146,21 +136,4 @@ func router(hh httpHandlers) http.Handler {
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
 	return monitoringRouter
-}
-
-func setLogLevel(level string) {
-	switch level {
-	case "DEBUG":
-		log.SetLevel(log.DebugLevel)
-	case "INFO":
-		log.SetLevel(log.InfoLevel)
-	case "WARN":
-		log.SetLevel(log.WarnLevel)
-	case "ERROR":
-		log.SetLevel(log.ErrorLevel)
-	default:
-		log.Errorf("Requested log level %s is not supported, will default to INFO level", level)
-		log.SetLevel(log.InfoLevel)
-	}
-	log.Debugf("Logging level set to %s", level)
 }

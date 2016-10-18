@@ -33,12 +33,12 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	conn  neoutils.NeoConnection
+	conn            neoutils.NeoConnection
 	platformVersion string
 }
 
 //NewCypherAnnotationsService instantiate driver
-func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection,  platformVersion string) service {
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string) service {
 	if platformVersion == "" {
 		log.Fatalf("PlatformVersion was not specified!")
 	}
