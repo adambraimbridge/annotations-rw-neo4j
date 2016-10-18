@@ -20,7 +20,7 @@ const (
 	brandUUID         = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
 	v2PlatformVersion = "v2"
 	v1PlatformVersion = "v1"
-	contentLifecycle = "content"
+	contentLifecycle  = "content"
 	annotationsV2     = "annotations-v2"
 )
 
@@ -77,7 +77,6 @@ func TestWriteAllValuesPresent(t *testing.T) {
 
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
-
 
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecycle(t *testing.T) {
 	assert := assert.New(t)
@@ -136,7 +135,6 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 			"brandUuid":       brandUUID,
 			"platformVersion": v2PlatformVersion,
 			"lifecycle":       contentLifecycle,
-
 		},
 	}
 
@@ -343,7 +341,6 @@ func getAnnotationsService(t *testing.T, platformVersion string) service {
 	if url == "" {
 		url = "http://localhost:7474/db/data"
 	}
-
 
 	conf := neoutils.DefaultConnectionConfig()
 	conf.Transactional = false
