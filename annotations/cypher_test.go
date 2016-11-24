@@ -335,6 +335,18 @@ func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
 }
 
+func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
+	assert := assert.New(t)
+	annotationToWrite := conceptWithAboutPredicate
+
+	fmt.Println("Testing about predicate \n")
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2PlatformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	assert.Contains(query.Statement, "ABOUT", fmt.Sprintf("\nRelationship name is not inserted!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
+}
+
 func getAnnotationsService(t *testing.T, platformVersion string) service {
 	assert := assert.New(t)
 	url := os.Getenv("NEO4J_TEST_URL")
