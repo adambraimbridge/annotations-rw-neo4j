@@ -60,6 +60,27 @@ var (
 			},
 		},
 	}
+	conceptWithAboutPredicate = annotation{
+		Thing: thing{ID: getURI(oldConceptUUID),
+			PrefLabel: "prefLabel",
+			Types: []string{
+				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/core/Thing",
+				"http://www.ft.com/ontology/concept/Concept",
+			},
+			Predicate: "about",
+		},
+		Provenances: []provenance{
+			{
+				Scores: []score{
+					score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+				},
+				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+				AtTime:    "2016-01-01T19:43:47.314Z",
+			},
+		},
+	}
 	multiConceptAnnotations = annotations{annotation{
 		Thing: thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
