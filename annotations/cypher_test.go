@@ -315,6 +315,8 @@ func TestGetRelationshipFromPredicate(t *testing.T) {
 		{"mentions", "MENTIONS"},
 		{"isClassifiedBy", "IS_CLASSIFIED_BY"},
 		{"", "MENTIONS"},
+		{"about", "ABOUT"},
+		{"hasAuthor", "HAS_AUTHOR"},
 	}
 
 	for _, test := range tests {
@@ -332,19 +334,27 @@ func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2PlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "IS_CLASSIFIED_BY", fmt.Sprintf("\nRelationship name is not inserted!"))
-	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of IS_CLASSIFIED_BY!"))
 }
 
 func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
 	assert := assert.New(t)
 	annotationToWrite := conceptWithAboutPredicate
 
-	fmt.Println("Testing about predicate \n")
-
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2PlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "ABOUT", fmt.Sprintf("\nRelationship name is not inserted!"))
-	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was insterted insted of IS_CLASSIFIED_BY!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of ABOUT!"))
+}
+
+func TestCreateAnnotationQueryWithHasAuthorPredicate(t *testing.T) {
+	assert := assert.New(t)
+	annotationToWrite := conceptWithHasAuthorPredicate
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2PlatformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	assert.Contains(query.Statement, "HAS_AUTHOR", fmt.Sprintf("\nRelationship name is not inserted!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_AUTHOR!"))
 }
 
 func getAnnotationsService(t *testing.T, platformVersion string) service {
