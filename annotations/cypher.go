@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
-
 	"regexp"
+	"time"
 
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
@@ -33,16 +32,20 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	conn            neoutils.NeoConnection
-	platformVersion string
+	conn                neoutils.NeoConnection
+	platformVersion     string
+	annotationLifecycle string
 }
 
 //NewCypherAnnotationsService instantiate driver
-func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string) service {
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string, annotationLifecycle string) service {
 	if platformVersion == "" {
-		log.Fatalf("PlatformVersion was not specified!")
+		log.Fatalf("Platform Version was not specified!")
 	}
-	return service{cypherRunner, platformVersion}
+	if annotationLifecycle == "" {
+		log.Fatalf("Annotation Lifecycle was not specified!")
+	}
+	return service{cypherRunner, platformVersion, annotationLifecycle}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
@@ -57,7 +60,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
-					MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
+					MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
 					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
 					collect(
 						{scores:[
@@ -71,7 +74,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle},
 		Result:     &results,
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
@@ -98,15 +101,11 @@ func (s service) Delete(contentUUID string) (bool, error) {
 
 	var deleteStatement string
 
-	if s.platformVersion == "v2" {
-		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
-	} else {
-		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
-	}
+	deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing) DELETE rel`
 
 	query := &neoism.CypherQuery{
 		Statement:    deleteStatement,
-		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
+		Parameters:   neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle},
 		IncludeStats: true,
 	}
 
@@ -137,11 +136,11 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID, s.platformVersion))
+	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID, s.annotationLifecycle))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
-		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion)
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion, s.annotationLifecycle)
 		if err != nil {
 			return err
 		}
@@ -191,7 +190,7 @@ func createAnnotationRelationship(relation string) (statement string) {
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (upp:Identifier:UPPIdentifier{value:{conceptID}})
                 MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptID}
-                MERGE (content)-[pred:%s {platformVersion:{platformVersion}}]->(concept)
+                MERGE (content)-[pred:%s {lifecycle:{annotationLifecycle}}]->(concept)
                 SET pred={annProps}
           `
 	statement = fmt.Sprintf(stmt, relation)
@@ -207,7 +206,7 @@ func getRelationshipFromPredicate(predicate string) (relation string) {
 	return relation
 }
 
-func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string) (*neoism.CypherQuery, error) {
+func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
 	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
@@ -222,7 +221,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	var prov provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
-	params["lifecycle"] = "annotations-" + platformVersion
+	params["lifecycle"] = annotationLifecycle
 
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
@@ -249,10 +248,10 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
 	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
-		"contentID":       contentUUID,
-		"conceptID":       thingID,
-		"platformVersion": platformVersion,
-		"annProps":        params,
+		"contentID":           contentUUID,
+		"conceptID":           thingID,
+		"annotationLifecycle": annotationLifecycle,
+		"annProps":            params,
 	}
 	return &query, nil
 }
@@ -312,26 +311,13 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
+func dropAllAnnotationsQuery(contentUUID string, annotationLifecycle string) *neoism.CypherQuery {
 
-	var matchStmtTemplate string
-
-	//TODO hard-coded verification:
-	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
-	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
-	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
-	if platformVersion == "v2" {
-		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
-                         		DELETE r`
-	} else {
-		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-					WHERE r.platformVersion={platformVersion}
-                         		DELETE r`
-	}
+	var matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing) DELETE r`
 
 	query := neoism.CypherQuery{}
 	query.Statement = matchStmtTemplate
-	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion}
+	query.Parameters = neoism.Props{"contentID": contentUUID, "annotationLifecycle": annotationLifecycle}
 	return &query
 }
 

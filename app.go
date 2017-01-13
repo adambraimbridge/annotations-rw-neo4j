@@ -70,6 +70,12 @@ func main() {
 		Desc:   "Annotation source platform. Possible values are: v1 or v2.",
 		EnvVar: "PLATFORM_VERSION",
 	})
+	annotationLifecycle := app.String(cli.StringOpt{
+		Name:   "annotationLifecycle",
+		Value:  "",
+		Desc:   "Annotation lifecycle. ",
+		EnvVar: "ANNOTATION_LIFECYCLE",
+	})
 
 	app.Action = func() {
 		parsedLogLevel, err := log.ParseLevel(*logLevel)
@@ -88,7 +94,7 @@ func main() {
 			log.Fatalf("Error connecting to neo4j %s", err)
 		}
 
-		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion)
+		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion, *annotationLifecycle)
 		httpHandlers := httpHandlers{annotationsService}
 
 		// Healthchecks and standards first
