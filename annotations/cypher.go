@@ -37,6 +37,12 @@ type service struct {
 	platformVersion string
 }
 
+const (
+	v1PlatformVersion         = "v1"
+	v2PlatformVersion         = "v2"
+	brightcovePlatformVersion = "brightcove"
+)
+
 //NewCypherAnnotationsService instantiate driver
 func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string) service {
 	if platformVersion == "" {
@@ -98,15 +104,21 @@ func (s service) Delete(contentUUID string) (bool, error) {
 
 	var deleteStatement string
 
-	if s.platformVersion == "v2" {
+	if s.platformVersion == v2PlatformVersion {
 		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
+	} else if s.platformVersion == brightcovePlatformVersion {
+		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
+		deleteStatement = `	OPTIONAL MATCH (c:Thing{uuid: {contentUUID}})-[r]->(cc:Thing)
+					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
+					DELETE r`
 	} else {
 		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
 	}
 
 	query := &neoism.CypherQuery{
-		Statement:    deleteStatement,
-		Parameters:   neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
+		Statement: deleteStatement,
+		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion,
+			"lifecycle": lifecycle(s.platformVersion), "v1Lifecycle": lifecycle(v1PlatformVersion)},
 		IncludeStats: true,
 	}
 
@@ -169,7 +181,7 @@ func (s service) Count() (int, error) {
                 WHERE r.lifecycle = {lifecycle}
                 OR r.lifecycle IS NULL
                 RETURN count(r) as c`,
-		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
+		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": lifecycle(s.platformVersion)},
 		Result:     &results,
 	}
 
@@ -222,7 +234,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	var prov provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
-	params["lifecycle"] = "annotations-" + platformVersion
+	params["lifecycle"] = lifecycle(platformVersion)
 
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
@@ -320,9 +332,14 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
 	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
-	if platformVersion == "v2" {
+	if platformVersion == v2PlatformVersion {
 		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
                          		DELETE r`
+	} else if platformVersion == brightcovePlatformVersion {
+		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
+		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
+					DELETE r`
 	} else {
 		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
 					WHERE r.platformVersion={platformVersion}
@@ -331,7 +348,8 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 
 	query := neoism.CypherQuery{}
 	query.Statement = matchStmtTemplate
-	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion}
+	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion,
+		"lifecycle": lifecycle(platformVersion), "v1Lifecycle": lifecycle(v1PlatformVersion)}
 	return &query
 }
 
@@ -362,4 +380,8 @@ func mapToResponseFormat(ann *annotation) {
 			ann.Provenances[idx].AgentRole = mapper.IDURL(ann.Provenances[idx].AgentRole)
 		}
 	}
+}
+
+func lifecycle(platformVersion string) string {
+	return "annotations-" + platformVersion
 }
