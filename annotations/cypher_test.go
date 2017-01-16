@@ -271,7 +271,7 @@ func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-// TODO this test can be removed when the special handling of videos with v1 as version will be removed (see cypher.go)
+// TODO this test can be removed when the special handling for videos with v1 as version will be removed (see cypher.go)
 func TestBrightcoveAnnotationsUpdateDeletesV1Annotations(t *testing.T) {
 	assert := assert.New(t)
 
@@ -321,7 +321,7 @@ func TestBrightcoveAnnotationsUpdateDeletesV1Annotations(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-// TODO this test can be removed when the special handling of videos with v1 as version will be removed (see cypher.go)
+// TODO this test can be removed when the special handling for videos with v1 as version will be removed (see cypher.go)
 func TestBrightcoveDeleteCleansAlsoV1Annotations(t *testing.T) {
 	assert := assert.New(t)
 
