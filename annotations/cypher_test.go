@@ -13,16 +13,16 @@ import (
 var annotationsDriver service
 
 const (
-	contentUUID           = "32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID           = "a7732a22-3884-4bfe-9761-fef161e41d69"
-	secondConceptUUID     = "c834adfa-10c9-4748-8a21-c08537172706"
-	oldConceptUUID        = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
-	brandUUID             = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
-	v2PlatformVersion     = "v2"
-	v1PlatformVersion     = "v1"
-	contentLifecycle      = "content"
-	v2AnnotationLifecycle = "annotations-v2"
-	v1AnnotationLifecycle = "annotations-v1"
+	contentUUID                   = "32b089d2-2aae-403d-be6e-877404f586cf"
+	conceptUUID                   = "a7732a22-3884-4bfe-9761-fef161e41d69"
+	secondConceptUUID             = "c834adfa-10c9-4748-8a21-c08537172706"
+	oldConceptUUID                = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	brandUUID                     = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
+	v2PlatformVersion             = "v2"
+	v1PlatformVersion             = "v1"
+	contentLifecycle              = "content"
+	v2AnnotationLifecycle         = "annotations-v2"
+	brightcoveAnnotationLifecycle = "annotations-brightcove"
 )
 
 func getURI(uuid string) string {
@@ -272,6 +272,102 @@ func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert.NoError(annotationsDriver.Write(contentUUID, conceptWithoutAgent), "Failed to write annotation")
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, conceptWithoutAgent)
 	cleanUp(t, contentUUID, []string{conceptUUID})
+}
+
+// TODO this test can be removed when the special handling for videos with v1 as version will be removed (see cypher.go)
+func TestBrightcoveAnnotationsUpdateDeletesV1Annotations(t *testing.T) {
+	assert := assert.New(t)
+
+	annotationsDriver = getAnnotationsService(t, brightcovePlatformVersion, brightcoveAnnotationLifecycle)
+
+	contentQuery := &neoism.CypherQuery{
+		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
+		 	    MERGE (a:Thing{uuid:{conceptUuid}})
+			    CREATE (n)-[rel:MENTIONS{platformVersion:{platformVersion}, lifecycle:{lifecycle}}]->(a)`,
+		Parameters: map[string]interface{}{
+			"contentUuid":     contentUUID,
+			"conceptUuid":     conceptUUID,
+			"platformVersion": v1PlatformVersion,
+			"lifecycle":       v1AnnotationLifecycle,
+		},
+	}
+
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	assert.NoError(err, "Error creating test data in database.")
+
+	assert.NoError(annotationsDriver.Write(contentUUID, exampleConcepts(conceptUUID)), "Failed to write annotation.")
+
+	result := []struct {
+		Lifecycle       string `json:"r.lifecycle"`
+		PlatformVersion string `json:"r.platformVersion"`
+	}{}
+
+	getContentQuery := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[r]->(b:Thing {uuid:{conceptUuid}}) RETURN r.lifecycle, r.platformVersion`,
+		Parameters: map[string]interface{}{
+			"contentUuid": contentUUID,
+			"conceptUuid": conceptUUID,
+		},
+		Result: &result,
+	}
+
+	readErr := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+
+	assert.NoError(readErr)
+	assert.Equal(1, len(result), "Relationships size worng.")
+
+	if len(result) > 0 {
+		assert.Equal(brightcovePlatformVersion, result[0].PlatformVersion, "Platform version wrong.")
+		assert.Equal(brightcoveAnnotationLifecycle, result[0].Lifecycle, "Lifecycle wrong.")
+	}
+
+	cleanUp(t, contentUUID, []string{conceptUUID})
+}
+
+// TODO this test can be removed when the special handling for videos with v1 as version will be removed (see cypher.go)
+func TestBrightcoveDeleteCleansAlsoV1Annotations(t *testing.T) {
+	assert := assert.New(t)
+
+	annotationsDriver = getAnnotationsService(t, brightcovePlatformVersion, brightcoveAnnotationLifecycle)
+
+	contentQuery := &neoism.CypherQuery{
+		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
+		 	    MERGE (a:Thing{uuid:{conceptUuid}})
+			    CREATE (n)-[rel:MENTIONS{platformVersion:{platformVersion}, lifecycle:{lifecycle}}]->(a)`,
+		Parameters: map[string]interface{}{
+			"contentUuid":     contentUUID,
+			"conceptUuid":     conceptUUID,
+			"platformVersion": v1PlatformVersion,
+			"lifecycle":       v1AnnotationLifecycle,
+		},
+	}
+
+	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	assert.NoError(err, "Error creating test data in database.")
+
+	_, err = annotationsDriver.Delete(contentUUID)
+	assert.NoError(err, "Failed to delete annotation.")
+
+	result := []struct {
+		platformVersion string `json:"r.platformVersion"`
+	}{}
+
+	getContentQuery := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[r]->(b:Thing {uuid:{conceptUuid}}) RETURN r.platformVersion`,
+		Parameters: map[string]interface{}{
+			"contentUuid": contentUUID,
+			"conceptUuid": conceptUUID,
+		},
+		Result: &result,
+	}
+
+	readErr := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
+
+	assert.NoError(readErr)
+	assert.Empty(result, "Relationship not cleaned.")
+
+	deleteNode(annotationsDriver, contentUUID)
+	deleteNode(annotationsDriver, conceptUUID)
 }
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {

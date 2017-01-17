@@ -37,6 +37,11 @@ type service struct {
 	annotationLifecycle string
 }
 
+const (
+	brightcovePlatformVersion = "brightcove"
+	v1AnnotationLifecycle     = "annotations-v1"
+)
+
 //NewCypherAnnotationsService instantiate driver
 func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string, annotationLifecycle string) service {
 	if platformVersion == "" {
@@ -99,15 +104,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
 
-	var deleteStatement string
-
-	deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing) DELETE rel`
-
-	query := &neoism.CypherQuery{
-		Statement:    deleteStatement,
-		Parameters:   neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle},
-		IncludeStats: true,
-	}
+	query := buildDeleteQuery(contentUUID, s.platformVersion, s.annotationLifecycle, true)
 
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
@@ -136,7 +133,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID, s.annotationLifecycle))
+	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.platformVersion, s.annotationLifecycle, false))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
@@ -168,7 +165,7 @@ func (s service) Count() (int, error) {
                 WHERE r.lifecycle = {lifecycle}
                 OR r.lifecycle IS NULL
                 RETURN count(r) as c`,
-		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": "annotations-" + s.platformVersion},
+		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": s.annotationLifecycle},
 		Result:     &results,
 	}
 
@@ -311,13 +308,23 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func dropAllAnnotationsQuery(contentUUID string, annotationLifecycle string) *neoism.CypherQuery {
+func buildDeleteQuery(contentUUID string, platformVersion string, annotationLifecycle string, includeStats bool) *neoism.CypherQuery {
+	var statement string
 
-	var matchStmtTemplate = `OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing) DELETE r`
+	if platformVersion == brightcovePlatformVersion {
+		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
+		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+					WHERE r.lifecycle={annotationLifecycle} OR r.lifecycle={v1Lifecycle}
+					DELETE r`
+	} else {
+		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing)
+					DELETE r`
+	}
 
-	query := neoism.CypherQuery{}
-	query.Statement = matchStmtTemplate
-	query.Parameters = neoism.Props{"contentID": contentUUID, "annotationLifecycle": annotationLifecycle}
+	query := neoism.CypherQuery{
+		Statement:    statement,
+		Parameters:   neoism.Props{"contentID": contentUUID, "annotationLifecycle": annotationLifecycle, "v1Lifecycle": v1AnnotationLifecycle},
+		IncludeStats: includeStats}
 	return &query
 }
 
