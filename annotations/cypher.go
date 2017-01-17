@@ -104,14 +104,15 @@ func (s service) Delete(contentUUID string) (bool, error) {
 
 	var deleteStatement string
 
-	if s.platformVersion == v2PlatformVersion {
+	switch {
+	case s.platformVersion == v2PlatformVersion:
 		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
-	} else if s.platformVersion == brightcovePlatformVersion {
+	case s.platformVersion == brightcovePlatformVersion:
 		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
 		deleteStatement = `	OPTIONAL MATCH (c:Thing{uuid: {contentUUID}})-[r]->(cc:Thing)
 					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
 					DELETE r`
-	} else {
+	default:
 		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
 	}
 
@@ -332,15 +333,16 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
 	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
-	if platformVersion == v2PlatformVersion {
+	switch {
+	case platformVersion == v2PlatformVersion:
 		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
                          		DELETE r`
-	} else if platformVersion == brightcovePlatformVersion {
+	case platformVersion == brightcovePlatformVersion:
 		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
 		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
 					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
 					DELETE r`
-	} else {
+	default:
 		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
 					WHERE r.platformVersion={platformVersion}
                          		DELETE r`
