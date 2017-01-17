@@ -62,24 +62,42 @@ func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 
 func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
 	results := []annotation{}
+	var statementTemplate string
 
-	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
-	statementTemplate := `
-					MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
-					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
-					collect(
-						{scores:[
-							{scoringSystem:'%s', value:rel.relevanceScore},
-							{scoringSystem:'%s', value:rel.confidenceScore}],
-						agentRole:rel.annotatedBy,
-						atTime:rel.annotatedDate}) as provenances
-					RETURN thing, provenances ORDER BY thing.id
-									`
+	if s.platformVersion == brightcovePlatformVersion {
+		//TODO This is only needed because Brightcove annotations are split across two lifecycles.  Once republished
+		// this code needs to be removed.
+		statementTemplate = `
+			MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
+			WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
+			collect(
+				{scores:[
+					{scoringSystem:'%s', value:rel.relevanceScore},
+					{scoringSystem:'%s', value:rel.confidenceScore}],
+				agentRole:rel.annotatedBy,
+				atTime:rel.annotatedDate}) as provenances
+			RETURN thing, provenances ORDER BY thing.id
+							`
+	} else {
+		//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
+		statementTemplate = `
+			MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
+			WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
+			collect(
+				{scores:[
+					{scoringSystem:'%s', value:rel.relevanceScore},
+					{scoringSystem:'%s', value:rel.confidenceScore}],
+				agentRole:rel.annotatedBy,
+				atTime:rel.annotatedDate}) as provenances
+			RETURN thing, provenances ORDER BY thing.id
+							`
+
+	}
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle, "platformVersion": s.platformVersion},
 		Result:     &results,
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
