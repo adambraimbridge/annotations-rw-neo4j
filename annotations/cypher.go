@@ -102,26 +102,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
 
-	var deleteStatement string
-
-	switch {
-	case s.platformVersion == v2PlatformVersion:
-		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel:MENTIONS{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
-	case s.platformVersion == brightcovePlatformVersion:
-		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
-		deleteStatement = `	OPTIONAL MATCH (c:Thing{uuid: {contentUUID}})-[r]->(cc:Thing)
-					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
-					DELETE r`
-	default:
-		deleteStatement = `MATCH (c:Thing{uuid: {contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing) DELETE rel`
-	}
-
-	query := &neoism.CypherQuery{
-		Statement: deleteStatement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion,
-			"lifecycle": lifecycle(s.platformVersion), "v1Lifecycle": lifecycle(v1PlatformVersion)},
-		IncludeStats: true,
-	}
+	query := buildDeleteQuery(contentUUID, s.platformVersion, true)
 
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
@@ -150,7 +131,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, dropAllAnnotationsQuery(contentUUID, s.platformVersion))
+	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.platformVersion, false))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
@@ -325,9 +306,8 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism.CypherQuery {
-
-	var matchStmtTemplate string
+func buildDeleteQuery(contentUUID string, platformVersion string, includeStats bool) *neoism.CypherQuery {
+	var statement string
 
 	//TODO hard-coded verification:
 	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
@@ -335,23 +315,24 @@ func dropAllAnnotationsQuery(contentUUID string, platformVersion string) *neoism
 	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
 	switch {
 	case platformVersion == v2PlatformVersion:
-		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
+		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
                          		DELETE r`
 	case platformVersion == brightcovePlatformVersion:
 		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
-		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
 					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
 					DELETE r`
 	default:
-		matchStmtTemplate = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
+		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
 					WHERE r.platformVersion={platformVersion}
                          		DELETE r`
 	}
 
-	query := neoism.CypherQuery{}
-	query.Statement = matchStmtTemplate
-	query.Parameters = neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion,
-		"lifecycle": lifecycle(platformVersion), "v1Lifecycle": lifecycle(v1PlatformVersion)}
+	query := neoism.CypherQuery{
+		Statement: statement,
+		Parameters: neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion,
+			"lifecycle": lifecycle(platformVersion), "v1Lifecycle": lifecycle(v1PlatformVersion)},
+		IncludeStats: includeStats}
 	return &query
 }
 
