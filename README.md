@@ -36,7 +36,7 @@ annotations wholesale from the concept extraction service, which annotates the w
 
 Supplying an empty list as the request body will remove all annotations for the content.
 
-A successful PUT results in 200.
+A successful PUT results in 201.
 
 We run queries in batches. If a batch fails, all failing requests will get a 500 server error response.
 
