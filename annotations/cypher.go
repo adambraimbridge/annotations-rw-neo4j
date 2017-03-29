@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
-
 	"regexp"
+	"time"
 
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
@@ -33,22 +32,25 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	conn            neoutils.NeoConnection
-	platformVersion string
+	conn                neoutils.NeoConnection
+	platformVersion     string
+	annotationLifecycle string
 }
 
 const (
-	v1PlatformVersion         = "v1"
-	v2PlatformVersion         = "v2"
 	brightcovePlatformVersion = "brightcove"
+	v1AnnotationLifecycle     = "annotations-v1"
 )
 
 //NewCypherAnnotationsService instantiate driver
-func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string) service {
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string, annotationLifecycle string) service {
 	if platformVersion == "" {
-		log.Fatalf("PlatformVersion was not specified!")
+		log.Fatalf("Platform Version was not specified!")
 	}
-	return service{cypherRunner, platformVersion}
+	if annotationLifecycle == "" {
+		log.Fatalf("Annotation Lifecycle was not specified!")
+	}
+	return service{cypherRunner, platformVersion, annotationLifecycle}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
@@ -60,24 +62,42 @@ func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 
 func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
 	results := []annotation{}
+	var statementTemplate string
 
-	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
-	statementTemplate := `
-					MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
-					WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
-					collect(
-						{scores:[
-							{scoringSystem:'%s', value:rel.relevanceScore},
-							{scoringSystem:'%s', value:rel.confidenceScore}],
-						agentRole:rel.annotatedBy,
-						atTime:rel.annotatedDate}) as provenances
-					RETURN thing, provenances ORDER BY thing.id
-									`
+	if s.platformVersion == brightcovePlatformVersion {
+		//TODO This is only needed because Brightcove annotations are split across two lifecycles.  Once republished
+		// this code needs to be removed.
+		statementTemplate = `
+			MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
+			WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
+			collect(
+				{scores:[
+					{scoringSystem:'%s', value:rel.relevanceScore},
+					{scoringSystem:'%s', value:rel.confidenceScore}],
+				agentRole:rel.annotatedBy,
+				atTime:rel.annotatedDate}) as provenances
+			RETURN thing, provenances ORDER BY thing.id
+							`
+	} else {
+		//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
+		statementTemplate = `
+			MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
+			WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
+			collect(
+				{scores:[
+					{scoringSystem:'%s', value:rel.relevanceScore},
+					{scoringSystem:'%s', value:rel.confidenceScore}],
+				agentRole:rel.annotatedBy,
+				atTime:rel.annotatedDate}) as provenances
+			RETURN thing, provenances ORDER BY thing.id
+							`
+
+	}
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "platformVersion": s.platformVersion},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle, "platformVersion": s.platformVersion},
 		Result:     &results,
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
@@ -102,7 +122,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
 
-	query := buildDeleteQuery(contentUUID, s.platformVersion, true)
+	query := buildDeleteQuery(contentUUID, s.platformVersion, s.annotationLifecycle, true)
 
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
@@ -131,11 +151,11 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.platformVersion, false))
+	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.platformVersion, s.annotationLifecycle, false))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
-		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion)
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion, s.annotationLifecycle)
 		if err != nil {
 			return err
 		}
@@ -163,7 +183,7 @@ func (s service) Count() (int, error) {
                 WHERE r.lifecycle = {lifecycle}
                 OR r.lifecycle IS NULL
                 RETURN count(r) as c`,
-		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": lifecycle(s.platformVersion)},
+		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": s.annotationLifecycle},
 		Result:     &results,
 	}
 
@@ -185,7 +205,7 @@ func createAnnotationRelationship(relation string) (statement string) {
                 MERGE (content:Thing{uuid:{contentID}})
                 MERGE (upp:Identifier:UPPIdentifier{value:{conceptID}})
                 MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptID}
-                MERGE (content)-[pred:%s {platformVersion:{platformVersion}}]->(concept)
+                MERGE (content)-[pred:%s {lifecycle:{annotationLifecycle}}]->(concept)
                 SET pred={annProps}
           `
 	statement = fmt.Sprintf(stmt, relation)
@@ -201,7 +221,7 @@ func getRelationshipFromPredicate(predicate string) (relation string) {
 	return relation
 }
 
-func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string) (*neoism.CypherQuery, error) {
+func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
 	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
@@ -216,7 +236,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	var prov provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
-	params["lifecycle"] = lifecycle(platformVersion)
+	params["lifecycle"] = annotationLifecycle
 
 	if len(ann.Provenances) >= 1 {
 		prov = ann.Provenances[0]
@@ -243,10 +263,10 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
 	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
-		"contentID":       contentUUID,
-		"conceptID":       thingID,
-		"platformVersion": platformVersion,
-		"annProps":        params,
+		"contentID":           contentUUID,
+		"conceptID":           thingID,
+		"annotationLifecycle": annotationLifecycle,
+		"annProps":            params,
 	}
 	return &query, nil
 }
@@ -306,32 +326,22 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func buildDeleteQuery(contentUUID string, platformVersion string, includeStats bool) *neoism.CypherQuery {
+func buildDeleteQuery(contentUUID string, platformVersion string, annotationLifecycle string, includeStats bool) *neoism.CypherQuery {
 	var statement string
 
-	//TODO hard-coded verification:
-	//WE STILL NEED THIS UNTIL EVERYTHNG HAS A LIFECYCLE PROPERTY!
-	// -> necessary for brands - which got written by content-api with isClassifiedBy relationship, and should not be deleted by annotations-rw
-	// -> so far brands are the only v2 concepts which have isClassifiedBy relationship; as soon as this changes: implementation needs to be updated
-	switch {
-	case platformVersion == v2PlatformVersion:
-		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r:MENTIONS{platformVersion:{platformVersion}}]->(t:Thing)
-                         		DELETE r`
-	case platformVersion == brightcovePlatformVersion:
+	if platformVersion == brightcovePlatformVersion {
 		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
 		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-					WHERE r.lifecycle={lifecycle} OR r.lifecycle={v1Lifecycle}
+					WHERE r.lifecycle={annotationLifecycle} OR r.lifecycle={v1Lifecycle}
 					DELETE r`
-	default:
-		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-					WHERE r.platformVersion={platformVersion}
-                         		DELETE r`
+	} else {
+		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing)
+					DELETE r`
 	}
 
 	query := neoism.CypherQuery{
-		Statement: statement,
-		Parameters: neoism.Props{"contentID": contentUUID, "platformVersion": platformVersion,
-			"lifecycle": lifecycle(platformVersion), "v1Lifecycle": lifecycle(v1PlatformVersion)},
+		Statement:    statement,
+		Parameters:   neoism.Props{"contentID": contentUUID, "annotationLifecycle": annotationLifecycle, "v1Lifecycle": v1AnnotationLifecycle},
 		IncludeStats: includeStats}
 	return &query
 }
@@ -363,8 +373,4 @@ func mapToResponseFormat(ann *annotation) {
 			ann.Provenances[idx].AgentRole = mapper.IDURL(ann.Provenances[idx].AgentRole)
 		}
 	}
-}
-
-func lifecycle(platformVersion string) string {
-	return "annotations-" + platformVersion
 }
