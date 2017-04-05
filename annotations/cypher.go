@@ -38,8 +38,8 @@ type service struct {
 }
 
 const (
-	brightcovePlatformVersion = "brightcove"
-	v1AnnotationLifecycle     = "annotations-v1"
+	nextVideoAnnotationsLifecycle = "annotations-next-video"
+	brightcoveAnnotationLifecycle = "annotations-brightcove"
 )
 
 //NewCypherAnnotationsService instantiate driver
@@ -62,25 +62,8 @@ func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 
 func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
 	results := []annotation{}
-	var statementTemplate string
-
-	if s.platformVersion == brightcovePlatformVersion {
-		//TODO This is only needed because Brightcove annotations are split across two lifecycles.  Once republished
-		// this code needs to be removed.
-		statementTemplate = `
-			MATCH (c:Thing{uuid:{contentUUID}})-[rel{platformVersion:{platformVersion}}]->(cc:Thing)
-			WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
-			collect(
-				{scores:[
-					{scoringSystem:'%s', value:rel.relevanceScore},
-					{scoringSystem:'%s', value:rel.confidenceScore}],
-				agentRole:rel.annotatedBy,
-				atTime:rel.annotatedDate}) as provenances
-			RETURN thing, provenances ORDER BY thing.id
-							`
-	} else {
-		//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
-		statementTemplate = `
+	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
+	statementTemplate := `
 			MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
 			WITH c, cc, rel, {id:cc.uuid,prefLabel:cc.prefLabel,types:labels(cc),predicate:type(rel)} as thing,
 			collect(
@@ -89,10 +72,8 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 					{scoringSystem:'%s', value:rel.confidenceScore}],
 				agentRole:rel.annotatedBy,
 				atTime:rel.annotatedDate}) as provenances
-			RETURN thing, provenances ORDER BY thing.id
-							`
+			RETURN thing, provenances ORDER BY thing.id`
 
-	}
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
 	query := &neoism.CypherQuery{
@@ -122,7 +103,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //as a result of this will need to happen externally if required
 func (s service) Delete(contentUUID string) (bool, error) {
 
-	query := buildDeleteQuery(contentUUID, s.platformVersion, s.annotationLifecycle, true)
+	query := buildDeleteQuery(contentUUID, s.annotationLifecycle, true)
 
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
@@ -151,7 +132,7 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.platformVersion, s.annotationLifecycle, false))
+	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.annotationLifecycle, false))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
@@ -326,13 +307,13 @@ func extractScores(scores []score) (float64, float64, error) {
 	return relevanceScore, confidenceScore, nil
 }
 
-func buildDeleteQuery(contentUUID string, platformVersion string, annotationLifecycle string, includeStats bool) *neoism.CypherQuery {
+func buildDeleteQuery(contentUUID string, annotationLifecycle string, includeStats bool) *neoism.CypherQuery {
 	var statement string
 
-	if platformVersion == brightcovePlatformVersion {
-		// TODO this clause should be refactored when all videos in Neo4j have brightcove only as lifecycle and no v1 reference
+	if annotationLifecycle == nextVideoAnnotationsLifecycle {
+		// TODO this clause should be deleted when all videos in Neo4j have annotations-next-video only as lifecycle and no brightcove reference
 		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-					WHERE r.lifecycle={annotationLifecycle} OR r.lifecycle={v1Lifecycle}
+					WHERE r.lifecycle={annotationLifecycle} OR r.lifecycle={brightcoveLifecycle}
 					DELETE r`
 	} else {
 		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing)
@@ -341,7 +322,7 @@ func buildDeleteQuery(contentUUID string, platformVersion string, annotationLife
 
 	query := neoism.CypherQuery{
 		Statement:    statement,
-		Parameters:   neoism.Props{"contentID": contentUUID, "annotationLifecycle": annotationLifecycle, "v1Lifecycle": v1AnnotationLifecycle},
+		Parameters:   neoism.Props{"contentID": contentUUID, "annotationLifecycle": annotationLifecycle, "brightcoveLifecycle": brightcoveAnnotationLifecycle},
 		IncludeStats: includeStats}
 	return &query
 }
