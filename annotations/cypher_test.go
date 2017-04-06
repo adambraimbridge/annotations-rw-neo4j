@@ -13,18 +13,18 @@ import (
 var annotationsDriver service
 
 const (
-	contentUUID                   = "32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID                   = "a7732a22-3884-4bfe-9761-fef161e41d69"
-	secondConceptUUID             = "c834adfa-10c9-4748-8a21-c08537172706"
-	oldConceptUUID                = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
-	brandUUID                     = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
-	v2PlatformVersion             = "v2"
-	v1PlatformVersion             = "v1"
-	nextVideoPlatformVersion             = "next-video"
-	brightcovePlatformVersion             = "brightcove"
-	contentLifecycle              = "content"
-	v2AnnotationLifecycle         = "annotations-v2"
-	v1AnnotationLifecycle         = "annotations-v1"
+	contentUUID               = "32b089d2-2aae-403d-be6e-877404f586cf"
+	conceptUUID               = "a7732a22-3884-4bfe-9761-fef161e41d69"
+	secondConceptUUID         = "c834adfa-10c9-4748-8a21-c08537172706"
+	oldConceptUUID            = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	brandUUID                 = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
+	v2PlatformVersion         = "v2"
+	v1PlatformVersion         = "v1"
+	nextVideoPlatformVersion  = "next-video"
+	brightcovePlatformVersion = "brightcove"
+	contentLifecycle          = "content"
+	v2AnnotationLifecycle     = "annotations-v2"
+	v1AnnotationLifecycle     = "annotations-v1"
 )
 
 func getURI(uuid string) string {
@@ -33,8 +33,6 @@ func getURI(uuid string) string {
 
 func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	annotationsToDelete := exampleConcepts(conceptUUID)
 
@@ -62,7 +60,6 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 
 func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
 
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 
@@ -74,8 +71,6 @@ func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 
 func TestWriteAllValuesPresent(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
@@ -88,8 +83,6 @@ func TestWriteAllValuesPresent(t *testing.T) {
 
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecycle(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	defer cleanDB(t, assert)
 
@@ -136,7 +129,6 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	defer cleanDB(t, assert)
-
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
 		MERGE (b:Brand{uuid:{brandUuid}}) SET b :Concept:Thing
@@ -181,7 +173,6 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 
 func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
 
 	v1AnnotationsDriver := getAnnotationsService(t, v1PlatformVersion, v1AnnotationLifecycle)
 	annotationsDriver := getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
@@ -269,8 +260,6 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 
 func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	assert.NoError(annotationsDriver.Write(contentUUID, multiConceptAnnotations), "Failed to write annotation")
 
@@ -280,8 +269,6 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 
 func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 
 	assert.NoError(annotationsDriver.Write(contentUUID, conceptWithoutAgent), "Failed to write annotation")
@@ -337,7 +324,6 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 		assert.Equal(nextVideoAnnotationsLifecycle, result[0].Lifecycle, "Lifecycle wrong.")
 	}
 
-	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
 // TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
@@ -389,8 +375,6 @@ func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	oldAnnotationsToWrite := exampleConcepts(oldConceptUUID)
 
@@ -407,8 +391,6 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 
 func TestConnectivityCheck(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
 	err := annotationsDriver.Check()
 	assert.NoError(err, "Unexpected error on connectivity check")
@@ -416,8 +398,6 @@ func TestConnectivityCheck(t *testing.T) {
 
 func TestCreateAnnotationQuery(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationToWrite := exampleConcept(oldConceptUUID)
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2PlatformVersion, v2AnnotationLifecycle)
@@ -448,8 +428,6 @@ func TestGetRelationshipFromPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationToWrite := conceptWithPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
@@ -460,8 +438,6 @@ func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationToWrite := conceptWithAboutPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
@@ -472,8 +448,6 @@ func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithHasAuthorPredicate(t *testing.T) {
 	assert := assert.New(t)
-	defer cleanDB(t, assert)
-
 	annotationToWrite := conceptWithHasAuthorPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
