@@ -22,7 +22,7 @@ func (hh *httpHandlers) HealthCheck() v1a.Check {
 	return v1a.Check{
 		BusinessImpact:   "Unable to respond to Annotation API requests",
 		Name:             "Check connectivity to Neo4j --neo-url is part of the service_args in hieradata for this service",
-		PanicGuide:       "TODO - write panic guide",
+		PanicGuide:       "https://dewey.ft.com/annotationsrw.html",
 		Severity:         1,
 		TechnicalSummary: "Cannot connect to Neo4j a instance with at least one person loaded in it",
 		Checker:          hh.Checker,

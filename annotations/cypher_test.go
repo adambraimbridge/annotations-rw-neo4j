@@ -13,16 +13,18 @@ import (
 var annotationsDriver service
 
 const (
-	contentUUID                   = "32b089d2-2aae-403d-be6e-877404f586cf"
-	conceptUUID                   = "a7732a22-3884-4bfe-9761-fef161e41d69"
-	secondConceptUUID             = "c834adfa-10c9-4748-8a21-c08537172706"
-	oldConceptUUID                = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
-	brandUUID                     = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
-	v2PlatformVersion             = "v2"
-	v1PlatformVersion             = "v1"
-	contentLifecycle              = "content"
-	v2AnnotationLifecycle         = "annotations-v2"
-	brightcoveAnnotationLifecycle = "annotations-brightcove"
+	contentUUID               = "32b089d2-2aae-403d-be6e-877404f586cf"
+	conceptUUID               = "a7732a22-3884-4bfe-9761-fef161e41d69"
+	secondConceptUUID         = "c834adfa-10c9-4748-8a21-c08537172706"
+	oldConceptUUID            = "ad28ddc7-4743-4ed3-9fad-5012b61fb919"
+	brandUUID                 = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
+	v2PlatformVersion         = "v2"
+	v1PlatformVersion         = "v1"
+	nextVideoPlatformVersion  = "next-video"
+	brightcovePlatformVersion = "brightcove"
+	contentLifecycle          = "content"
+	v2AnnotationLifecycle     = "annotations-v2"
+	v1AnnotationLifecycle     = "annotations-v1"
 )
 
 func getURI(uuid string) string {
@@ -274,11 +276,12 @@ func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-// TODO this test can be removed when the special handling for videos with v1 as version will be removed (see cypher.go)
-func TestBrightcoveAnnotationsUpdateDeletesV1Annotations(t *testing.T) {
+// TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
+func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 	assert := assert.New(t)
+	defer cleanDB(t, assert)
 
-	annotationsDriver = getAnnotationsService(t, brightcovePlatformVersion, brightcoveAnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t, nextVideoPlatformVersion, nextVideoAnnotationsLifecycle)
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
@@ -287,8 +290,8 @@ func TestBrightcoveAnnotationsUpdateDeletesV1Annotations(t *testing.T) {
 		Parameters: map[string]interface{}{
 			"contentUuid":     contentUUID,
 			"conceptUuid":     conceptUUID,
-			"platformVersion": v1PlatformVersion,
-			"lifecycle":       v1AnnotationLifecycle,
+			"platformVersion": brightcovePlatformVersion,
+			"lifecycle":       brightcoveAnnotationLifecycle,
 		},
 	}
 
@@ -317,18 +320,18 @@ func TestBrightcoveAnnotationsUpdateDeletesV1Annotations(t *testing.T) {
 	assert.Equal(1, len(result), "Relationships size worng.")
 
 	if len(result) > 0 {
-		assert.Equal(brightcovePlatformVersion, result[0].PlatformVersion, "Platform version wrong.")
-		assert.Equal(brightcoveAnnotationLifecycle, result[0].Lifecycle, "Lifecycle wrong.")
+		assert.Equal(nextVideoPlatformVersion, result[0].PlatformVersion, "Platform version wrong.")
+		assert.Equal(nextVideoAnnotationsLifecycle, result[0].Lifecycle, "Lifecycle wrong.")
 	}
 
-	cleanUp(t, contentUUID, []string{conceptUUID})
 }
 
-// TODO this test can be removed when the special handling for videos with v1 as version will be removed (see cypher.go)
-func TestBrightcoveDeleteCleansAlsoV1Annotations(t *testing.T) {
+// TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
+func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 	assert := assert.New(t)
+	defer cleanDB(t, assert)
 
-	annotationsDriver = getAnnotationsService(t, brightcovePlatformVersion, brightcoveAnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t, nextVideoPlatformVersion, nextVideoAnnotationsLifecycle)
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
@@ -337,8 +340,8 @@ func TestBrightcoveDeleteCleansAlsoV1Annotations(t *testing.T) {
 		Parameters: map[string]interface{}{
 			"contentUuid":     contentUUID,
 			"conceptUuid":     conceptUUID,
-			"platformVersion": v1PlatformVersion,
-			"lifecycle":       v1AnnotationLifecycle,
+			"platformVersion": brightcovePlatformVersion,
+			"lifecycle":       brightcoveAnnotationLifecycle,
 		},
 	}
 
