@@ -1,0 +1,8 @@
+# Values used for the deployed application.
+replicaCount: 2
+service:
+  name: v2-annotations-rw-neo4j
+env:
+  ANNOTATION_LIFECYCLE: annotations-v2
+  PLATFORM_VERSION: v2
+  GRAPHITE_PREFIX: coco.services.k8s.v2-annotations-rw-neo4j
