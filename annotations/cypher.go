@@ -1,12 +1,11 @@
 package annotations
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"time"
 
+	"errors"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
@@ -25,7 +24,6 @@ type Service interface {
 	Read(contentUUID string) (thing interface{}, found bool, err error)
 	Delete(contentUUID string) (found bool, err error)
 	Check() (err error)
-	DecodeJSON(*json.Decoder) (thing interface{}, err error)
 	Count() (int, error)
 	Initialise() error
 }
@@ -53,15 +51,8 @@ func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVe
 	return service{cypherRunner, platformVersion, annotationLifecycle}
 }
 
-// DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
-func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
-	a := annotations{}
-	err := dec.Decode(&a)
-	return a, err
-}
-
 func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
-	results := []annotation{}
+	results := []Annotation{}
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
 			MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
@@ -202,7 +193,7 @@ func getRelationshipFromPredicate(predicate string) (relation string) {
 	return relation
 }
 
-func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
+func createAnnotationQuery(contentUUID string, ann Annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
 	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
@@ -214,7 +205,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		return nil, errors.New("Cannot insert a MENTIONS annotation with multiple provenances")
 	}*/
 
-	var prov provenance
+	var prov Provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
 	params["lifecycle"] = annotationLifecycle
@@ -252,7 +243,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	return &query, nil
 }
 
-func extractDataFromProvenance(prov *provenance) (string, int64, float64, float64, bool, error) {
+func extractDataFromProvenance(prov *Provenance) (string, int64, float64, float64, bool, error) {
 	if len(prov.Scores) == 0 {
 		return "", -1, -1, -1, false, nil
 	}
@@ -292,7 +283,7 @@ func convertAnnotatedDateToEpoch(annotatedDateString string) (int64, error) {
 	return datetimeEpoch.Unix(), nil
 }
 
-func extractScores(scores []score) (float64, float64, error) {
+func extractScores(scores []Score) (float64, float64, error) {
 	var relevanceScore, confidenceScore float64
 	for _, score := range scores {
 		scoringSystem := score.ScoringSystem
@@ -346,7 +337,7 @@ func (v ValidationError) Error() string {
 	return v.Msg
 }
 
-func mapToResponseFormat(ann *annotation) {
+func mapToResponseFormat(ann *Annotation) {
 	ann.Thing.ID = mapper.IDURL(ann.Thing.ID)
 	// We expect only ONE provenance - provenance value is considered valid even if the AgentRole is not specified. See: v1 - isClassifiedBy
 	for idx := range ann.Provenances {

@@ -471,7 +471,7 @@ func getAnnotationsService(t *testing.T, platformVersion string, annotationLifec
 	return NewCypherAnnotationsService(db, platformVersion, annotationLifecycle)
 }
 
-func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {
+func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []Annotation) {
 	assert := assert.New(t)
 	storedThings, found, err := annotationsDriver.Read(contentUUID)
 	storedAnnotations := storedThings.(annotations)

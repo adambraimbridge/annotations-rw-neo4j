@@ -2,47 +2,41 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
-	"github.com/Financial-Times/go-fthealth/v1a"
+	"github.com/Financial-Times/kafka-client-go/kafka"
+	"github.com/Financial-Times/transactionid-utils-go"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
+	"github.com/twinj/uuid"
+	"io"
+	"time"
 )
 
 type httpHandlers struct {
 	AnnotationsService annotations.Service
+	producer           kafka.Producer
+	forward            bool
 }
 
-// HealthCheck does something
-func (hh *httpHandlers) HealthCheck() v1a.Check {
-	return v1a.Check{
-		BusinessImpact:   "Unable to respond to Annotation API requests",
-		Name:             "Check connectivity to Neo4j --neo-url is part of the service_args in hieradata for this service",
-		PanicGuide:       "https://dewey.ft.com/annotationsrw.html",
-		Severity:         1,
-		TechnicalSummary: "Cannot connect to Neo4j a instance with at least one person loaded in it",
-		Checker:          hh.Checker,
-	}
+type queueHandler struct {
+	AnnotationsService annotations.Service
+	consumer           kafka.Consumer
+	producer           kafka.Producer
+	forward            bool
 }
 
-// Checker does more stuff
-//TODO use the shared utility check
-func (hh *httpHandlers) Checker() (string, error) {
-	err := hh.AnnotationsService.Check()
-	if err == nil {
-		return "Connectivity to neo4j is ok", err
-	}
-	return "Error connecting to neo4j", err
+// annotationsMessage represents a message ingested from the queue
+type queueMessage struct {
+	UUID    string      `json:"uuid,omitempty"`
+	Payload interface{} `json:"annotations,omitempty"`
 }
 
-// Ping says pong
-func Ping(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "pong")
-}
+const dateFormat = "2006-01-02T03:04:05.000Z0700"
 
 func jsonMessage(msgText string) []byte {
 	return []byte(fmt.Sprintf(`{"message":"%s"}`, msgText))
@@ -66,8 +60,7 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	}
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
-	decoder := json.NewDecoder(r.Body)
-	anns, err := hh.AnnotationsService.DecodeJSON(decoder)
+	anns, err := decode(r.Body)
 	if err != nil {
 		msg := fmt.Sprintf("Error (%v) parsing annotation request", err)
 		log.Info(msg)
@@ -86,9 +79,33 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
+
+	tid := transactionidutils.GetTransactionIDFromRequest(r)
+	originSystem := r.Header.Get("X-Origin-System-Id")
+	if hh.producer != nil && hh.forward {
+		err = hh.forwardMessage(uuid, tid, originSystem, anns)
+		if err != nil {
+			msg := "Failed to forward message to queue"
+			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid, "error": err}).Error(msg)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(jsonMessage(msg)))
+			return
+		}
+	}
+
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(jsonMessage(fmt.Sprintf("Annotations for content %s created", uuid))))
 	return
+}
+
+func (hh *httpHandlers) forwardMessage(u string, tid string, originSystem string, annotations interface{}) error {
+	headers := createHeader(tid, originSystem)
+	body, err := json.Marshal(queueMessage{u, annotations})
+	if err != nil {
+		return err
+	}
+	message := kafka.NewFTMessage(headers, string(body))
+	return hh.producer.SendMessage(message)
 }
 
 // GetAnnotations returns a view of the annotations written - it is NOT the public annotations API, and
@@ -170,4 +187,50 @@ func (hh *httpHandlers) CountAnnotations(w http.ResponseWriter, r *http.Request)
 func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int) {
 	w.WriteHeader(statusCode)
 	fmt.Fprintln(w, fmt.Sprintf("{\"message\": \"%s\"}", errorMsg))
+}
+
+func (qh queueHandler) Ingest() {
+	qh.consumer.StartListening(func(message kafka.FTMessage) error {
+		annotationMessage := new(queueMessage)
+
+		tid, found := message.Headers["X-Request-Id"]
+		if !found {
+			return errors.New("Missing transaction id from message")
+		}
+
+		log.WithFields(map[string]interface{}{"tid": tid}).Infof("Received write request %s from queue", tid)
+		err := json.Unmarshal([]byte(message.Body), &annotationMessage)
+		if err != nil {
+			return errors.Wrapf(err, "Cannot read message body for %s", tid)
+		}
+
+		//write received message to neo4j
+		err = qh.AnnotationsService.Write(annotationMessage.UUID, annotationMessage.Payload)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)
+		}
+
+		//forward message to next queue
+		if qh.producer != nil && qh.forward {
+			return qh.producer.SendMessage(message)
+		}
+		return nil
+	})
+}
+
+func createHeader(tid string, originSystem string) map[string]string {
+	return map[string]string{
+		"X-Request-Id":      tid,
+		"Message-Timestamp": time.Now().Format(dateFormat),
+		"Message-Id":        uuid.NewV4().String(),
+		"Message-Type":      "concept-annotations",
+		"Content-Type":      "application/json",
+		"Origin-System-Id":  originSystem,
+	}
+}
+
+func decode(body io.Reader) ([]annotations.Annotation, error) {
+	var anns []annotations.Annotation
+	err := json.NewDecoder(body).Decode(&anns)
+	return anns, err
 }

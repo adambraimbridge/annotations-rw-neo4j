@@ -8,10 +8,9 @@ import (
 
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
-	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
+	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/Financial-Times/service-status-go/gtg"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -76,6 +75,39 @@ func main() {
 		Desc:   "Annotation lifecycle. ",
 		EnvVar: "ANNOTATION_LIFECYCLE",
 	})
+	zookeeperAddress := app.String(cli.StringOpt{
+		Name:   "zookeeperAddress",
+		Value:  "localhost:2181",
+		Desc:   "Address of the zookeeper service",
+		EnvVar: "ZOOKEEPER_ADDRESS",
+	})
+	consumerGroup := app.String(cli.StringOpt{
+		Name:   "consumerGroup",
+		Desc:   "Kafka consumer group name",
+		EnvVar: "CONSUMER_GROUP",
+	})
+	consumerTopic := app.String(cli.StringOpt{
+		Name:   "consumerTopic",
+		Desc:   "Kafka consumer topic name",
+		EnvVar: "CONSUMER_TOPIC",
+	})
+	brokerAddress := app.String(cli.StringOpt{
+		Name:   "brokerAddress",
+		Value:  "localhost:9092",
+		Desc:   "Kafka address",
+		EnvVar: "BROKER_ADDRESS",
+	})
+	producerTopic := app.String(cli.StringOpt{
+		Name:   "producerTopic",
+		Desc:   "Topic to which received messages will be forwarded",
+		EnvVar: "PRODUCER_TOPIC",
+	})
+
+	forward := app.Bool(cli.BoolOpt{
+		Name:   "forward",
+		Desc:   "Decides if annotations messages should be forwarded to next queue",
+		EnvVar: "FORWARD",
+	})
 
 	app.Action = func() {
 		parsedLogLevel, err := log.ParseLevel(*logLevel)
@@ -95,27 +127,31 @@ func main() {
 		}
 
 		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion, *annotationLifecycle)
-		httpHandlers := httpHandlers{annotationsService}
 
-		// Healthchecks and standards first
-		http.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
-			"Checks for accessing neo4j", httpHandlers.HealthCheck()))
-		http.HandleFunc(status.PingPath, status.PingHandler)
-		http.HandleFunc(status.PingPathDW, status.PingHandler)
-		http.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
-		http.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
+		queueAvailable := true
+		consumer, err := kafka.NewConsumer(*zookeeperAddress, *consumerGroup, []string{*consumerTopic}, kafka.DefaultConsumerConfig())
+		if err != nil {
+			queueAvailable = false
+			log.Error("Cannot start queue consumer")
+		}
 
-		gtgChecker := make([]gtg.StatusChecker, 0)
-		gtgChecker = append(gtgChecker, func() gtg.Status {
-			if err := httpHandlers.AnnotationsService.Check(); err != nil {
-				return gtg.Status{GoodToGo: false, Message: err.Error()}
-			}
+		var hh httpHandlers
+		producer, err := kafka.NewProducer(*brokerAddress, *producerTopic)
+		if err != nil {
+			queueAvailable = false
+			log.Error("Cannot start queur producer")
+			hh = httpHandlers{annotationsService, nil, *forward}
+		} else {
+			hh = httpHandlers{annotationsService, producer, *forward}
+		}
 
-			return gtg.Status{GoodToGo: true}
-		})
-		http.HandleFunc(status.GTGPath, status.NewGoodToGoHandler(gtg.FailFastParallelCheck(gtgChecker)))
+		if queueAvailable {
+			queueHandler := queueHandler{annotationsService, consumer, producer, *forward}
+			go queueHandler.Ingest()
+		}
 
-		r := router(httpHandlers)
+		hc := healthCheckHandler{annotationsService, consumer}
+		r := router(hh, hc)
 		http.Handle("/", r)
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
@@ -128,7 +164,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func router(hh httpHandlers) http.Handler {
+func router(hh httpHandlers, hc healthCheckHandler) http.Handler {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
 	// Then API specific ones:
@@ -136,6 +172,13 @@ func router(hh httpHandlers) http.Handler {
 	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
 	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.DeleteAnnotations).Methods("DELETE")
 	servicesRouter.HandleFunc("/content/annotations/__count", hh.CountAnnotations).Methods("GET")
+
+	servicesRouter.HandleFunc("/__health", hc.Health()).Methods("GET")
+	servicesRouter.HandleFunc("/__gtg", status.NewGoodToGoHandler(hc.GTG)).Methods("GET")
+	servicesRouter.HandleFunc(status.PingPath, status.PingHandler).Methods("GET")
+	servicesRouter.HandleFunc(status.PingPathDW, status.PingHandler).Methods("GET")
+	servicesRouter.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler).Methods("GET")
+	servicesRouter.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler).Methods("GET")
 
 	var monitoringRouter http.Handler = servicesRouter
 	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), monitoringRouter)

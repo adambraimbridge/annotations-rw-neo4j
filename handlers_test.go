@@ -3,97 +3,252 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"github.com/Financial-Times/kafka-client-go/kafka"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/suite"
+	"io/ioutil"
+	"net/http/httptest"
 )
 
 const knownUUID = "12345"
 
-type test struct {
-	name         string
-	req          *http.Request
-	dummyService annotations.Service
-	statusCode   int
-	contentType  string // Contents of the Content-Type header
-	body         string
+type HttpHandlerTestSuite struct {
+	suite.Suite
+	body               []byte
+	annotations        []annotations.Annotation
+	annotationsService *mockAnnotationsService
+	producer           *mockProducer
+	message            kafka.FTMessage
+	healthCheckHandler healthCheckHandler
 }
 
-func TestPutHandler(t *testing.T) {
-	assert := assert.New(t)
-	body, err := ioutil.ReadFile("annotations/examplePutBody.json")
-	assert.NoError(err, "Unexpected error")
-	invalidBody := []byte(`{"id": "1234"}`)
-	missingConceptIDBody := []byte(`"{"thing": {"prefLabel": "Apple"}`)
-	tests := []test{
-		{"Success", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", body), dummyService{contentUUID: knownUUID}, http.StatusCreated, "application/json", message("Annotations for content 12345 created")},
-		{"ParseError", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", invalidBody), dummyService{contentUUID: knownUUID, failParse: true}, http.StatusBadRequest, "application/json", message("Error (TEST failing to DECODE) parsing annotation request")},
-		{"ValidationError", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", missingConceptIDBody), dummyService{contentUUID: knownUUID, failValidation: true}, http.StatusBadRequest, "application/json", message("Error creating annotations (TEST failing validation)")},
-		{"NotJson", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "text/html", body), dummyService{contentUUID: knownUUID}, http.StatusBadRequest, "application/json", message("Http Header 'Content-Type' is not 'application/json', this is a JSON API")},
-		{"WriteFailed", newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", body), dummyService{contentUUID: knownUUID, failWrite: true}, http.StatusServiceUnavailable, "application/json", message("Error creating annotations (TEST failing to WRITE)")},
-	}
+func (suite *HttpHandlerTestSuite) SetupTest() {
+	var err error
+	suite.body, err = ioutil.ReadFile("annotations/examplePutBody.json")
+	assert.NoError(suite.T(), err, "Unexpected error")
 
-	for _, test := range tests {
-		rec := httptest.NewRecorder()
-		router(httpHandlers{test.dummyService}).ServeHTTP(rec, test.req)
-		assert.True(test.statusCode == rec.Code, fmt.Sprintf("%s: Wrong response code, was %d, should be %d", test.name, rec.Code, test.statusCode))
-		assert.JSONEq(test.body, rec.Body.String(), fmt.Sprintf("%s: Wrong body", test.name))
-	}
+	suite.annotations, err = decode(bytes.NewReader(suite.body))
+	assert.NoError(suite.T(), err, "Unexpected error")
+
+	suite.annotationsService = new(mockAnnotationsService)
+	suite.producer = new(mockProducer)
+
+	headers := createHeader("tid_sample", "test_origin_system")
+	msgBody, err := json.Marshal(queueMessage{knownUUID, suite.annotations})
+	assert.NoError(suite.T(), err, "Unexpected error")
+	suite.message = kafka.NewFTMessage(headers, string(msgBody))
+	suite.healthCheckHandler = healthCheckHandler{}
 }
 
-func TestGetHandler(t *testing.T) {
-	assert := assert.New(t)
-	tests := []test{
-		{"Success", newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil), dummyService{contentUUID: knownUUID}, http.StatusOK, "", "[]"},
-		{"NotFound", newRequest("GET", fmt.Sprintf("/content/%s/annotations", "99999"), "application/json", nil), dummyService{contentUUID: knownUUID}, http.StatusNotFound, "", message("No annotations found for content with uuid 99999.")},
-		{"ReadError", newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil), dummyService{contentUUID: knownUUID, failRead: true}, http.StatusServiceUnavailable, "", message("Error getting annotations (TEST failing to READ)")},
-	}
-
-	for _, test := range tests {
-		rec := httptest.NewRecorder()
-		router(httpHandlers{test.dummyService}).ServeHTTP(rec, test.req)
-		assert.True(test.statusCode == rec.Code, fmt.Sprintf("%s: Wrong response code, was %d, should be %d", test.name, rec.Code, test.statusCode))
-		assert.JSONEq(test.body, rec.Body.String(), fmt.Sprintf("%s: Wrong body", test.name))
-	}
+func TestHttpHandlerTestSuite(t *testing.T) {
+	suite.Run(t, new(HttpHandlerTestSuite))
 }
 
-func TestDeleteHandler(t *testing.T) {
-	assert := assert.New(t)
-	tests := []test{
-		{"Success", newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil), dummyService{contentUUID: knownUUID}, http.StatusNoContent, "", message("Annotations for content 12345 deleted")},
-		{"NotFound", newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", "99999"), "application/json", nil), dummyService{contentUUID: knownUUID}, http.StatusNotFound, "", message("No annotations found for content with uuid 99999.")},
-		{"DeleteError", newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil), dummyService{contentUUID: knownUUID, failDelete: true}, http.StatusServiceUnavailable, "", message("TEST failing to DELETE")},
-	}
-
-	for _, test := range tests {
-		rec := httptest.NewRecorder()
-		router(httpHandlers{test.dummyService}).ServeHTTP(rec, test.req)
-		assert.True(test.statusCode == rec.Code, fmt.Sprintf("%s: Wrong response code, was %d, should be %d", test.name, rec.Code, test.statusCode))
-		if rec.Body != nil {
-			assert.JSONEq(test.body, rec.Body.String(), fmt.Sprintf("%s: Wrong body", test.name))
-		}
-	}
+func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
+	suite.annotationsService.On("Write", knownUUID, suite.annotations).Return(nil)
+	suite.producer.On("SendMessage", mock.Anything).Return(nil).Once()
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", suite.body)
+	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Origin-System_Id", "test_origin_system")
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: true}
+	rec := httptest.NewRecorder()
+	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusCreated == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
+	assert.JSONEq(suite.T(), message("Annotations for content 12345 created"), rec.Body.String(), "Wrong body")
+	suite.producer.AssertExpectations(suite.T())
 }
 
-func TestCountHandler(t *testing.T) {
-	assert := assert.New(t)
-	tests := []test{
-		{"Success", newRequest("GET", "/content/annotations/__count", "application/json", nil), dummyService{contentUUID: knownUUID}, http.StatusOK, "", "2\n"},
-		{"CountError", newRequest("GET", "/content/annotations/__count", "application/json", nil), dummyService{contentUUID: knownUUID, failCount: true}, http.StatusServiceUnavailable, "", message("TEST failing to COUNT")},
-	}
+func (suite *HttpHandlerTestSuite) TestPutHandler_ParseError() {
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", []byte(`{"id": "1234"}`))
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	rec := httptest.NewRecorder()
+	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
+}
 
-	for _, test := range tests {
-		rec := httptest.NewRecorder()
-		router(httpHandlers{test.dummyService}).ServeHTTP(rec, test.req)
-		assert.True(test.statusCode == rec.Code, fmt.Sprintf("%s: Wrong response code, was %d, should be %d", test.name, rec.Code, test.statusCode))
-		assert.Equal(test.body, rec.Body.String(), fmt.Sprintf("%s: Wrong body", test.name))
+func (suite *HttpHandlerTestSuite) TestPutHandler_ValidationError() {
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", []byte(`"{"thing": {"prefLabel": "Apple"}`))
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	rec := httptest.NewRecorder()
+	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
+}
+
+func (suite *HttpHandlerTestSuite) TestPutHandler_NotJson() {
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "text/html", suite.body)
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	rec := httptest.NewRecorder()
+	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
+
+}
+
+func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
+	suite.annotationsService.On("Write", knownUUID, suite.annotations).Return(errors.New("Write failed"))
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", suite.body)
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	rec := httptest.NewRecorder()
+	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
+}
+
+func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {
+	suite.annotationsService.On("Write", knownUUID, suite.annotations).Return(nil)
+	suite.producer.On("SendMessage", mock.Anything).Return(errors.New("Forwarding failed"))
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", suite.body)
+	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Origin-System_Id", "test_origin_system")
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: true}
+	rec := httptest.NewRecorder()
+	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusInternalServerError == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusInternalServerError))
+}
+
+func (suite *HttpHandlerTestSuite) TestGetHandler_Success() {
+	suite.annotationsService.On("Read", knownUUID).Return(suite.annotations, true, nil)
+	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
+	expectedResponse, err := json.Marshal(suite.annotations)
+	assert.NoError(suite.T(), err, "")
+	assert.JSONEq(suite.T(), string(expectedResponse), rec.Body.String(), "Wrong body")
+}
+
+func (suite *HttpHandlerTestSuite) TestGetHandler_NotFound() {
+	suite.annotationsService.On("Read", knownUUID).Return(nil, false, nil)
+	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusNotFound == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusNotFound))
+}
+
+func (suite *HttpHandlerTestSuite) TestGetHandler_ReadError() {
+	suite.annotationsService.On("Read", knownUUID).Return(nil, false, errors.New("Read error"))
+	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
+}
+
+func (suite *HttpHandlerTestSuite) TestDeleteHandler_Success() {
+	suite.annotationsService.On("Delete", knownUUID).Return(true, nil)
+	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusNoContent == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusNoContent))
+}
+
+func (suite *HttpHandlerTestSuite) TestDeleteHandler_NotFound() {
+	suite.annotationsService.On("Delete", knownUUID).Return(false, nil)
+	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusNotFound == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusNotFound))
+}
+
+func (suite *HttpHandlerTestSuite) TestDeleteHandler_DeleteError() {
+	suite.annotationsService.On("Delete", knownUUID).Return(false, errors.New("Delete error"))
+	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
+}
+
+func (suite *HttpHandlerTestSuite) TestCount_Success() {
+	suite.annotationsService.On("Count").Return(10, nil)
+	request := newRequest("GET", "/content/annotations/__count", "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
+}
+
+func (suite *HttpHandlerTestSuite) TestCount_CountError() {
+	suite.annotationsService.On("Count").Return(0, errors.New("Count error"))
+	request := newRequest("GET", "/content/annotations/__count", "application/json", nil)
+	rec := httptest.NewRecorder()
+	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
+}
+
+type QueueHandlerTestSuite struct {
+	suite.Suite
+	headers            map[string]string
+	body               []byte
+	message            kafka.FTMessage
+	queueMessage       queueMessage
+	annotationsService *mockAnnotationsService
+	producer           *mockProducer
+}
+
+func (suite *QueueHandlerTestSuite) SetupTest() {
+	var err error
+	suite.headers = createHeader("tid_sample", "sample-origin")
+	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
+	assert.NoError(suite.T(), err, "Unexpected error")
+	suite.message = kafka.NewFTMessage(suite.headers, string(suite.body))
+	err = json.Unmarshal(suite.body, &suite.queueMessage)
+	assert.NoError(suite.T(), err, "Unexpected error")
+	suite.annotationsService = new(mockAnnotationsService)
+	suite.producer = new(mockProducer)
+}
+
+func TestQueueHandlerTestSuite(t *testing.T) {
+	suite.Run(t, new(QueueHandlerTestSuite))
+}
+
+func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
+	suite.annotationsService.On("Write", suite.queueMessage.UUID, suite.queueMessage.Payload).Return(nil)
+	suite.producer.On("SendMessage", suite.message).Return(nil)
+
+	qh := &queueHandler{
+		AnnotationsService: suite.annotationsService,
+		consumer:           mockConsumer{message: suite.message},
+		producer:           suite.producer,
+		forward:            true,
 	}
+	qh.Ingest()
+
+	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, suite.queueMessage.Payload)
+	suite.producer.AssertCalled(suite.T(), "SendMessage", suite.message)
+}
+
+func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ForwardingDisabled() {
+	suite.annotationsService.On("Write", suite.queueMessage.UUID, suite.queueMessage.Payload).Return(nil)
+
+	qh := queueHandler{
+		AnnotationsService: suite.annotationsService,
+		consumer:           mockConsumer{message: suite.message},
+		producer:           suite.producer,
+		forward:            false,
+	}
+	qh.Ingest()
+
+	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, suite.queueMessage.Payload)
+	suite.producer.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
+}
+
+func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_JsonError() {
+	body := "invalid json"
+	message := kafka.NewFTMessage(suite.headers, string(body))
+
+	qh := &queueHandler{
+		AnnotationsService: suite.annotationsService,
+		consumer:           mockConsumer{message: message},
+		producer:           suite.producer,
+		forward:            false,
+	}
+	qh.Ingest()
+
+	suite.producer.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
+	suite.annotationsService.AssertNumberOfCalls(suite.T(), "Write", 0)
 }
 
 func newRequest(method, url, contentType string, body []byte) *http.Request {
@@ -109,70 +264,61 @@ func message(errMsg string) string {
 	return fmt.Sprintf("{\"message\": \"%s\"}\n", errMsg)
 }
 
-type dummyService struct {
-	contentUUID    string
-	failWrite      bool
-	failRead       bool
-	failParse      bool
-	failValidation bool
-	failDelete     bool
-	failCount      bool
+type mockProducer struct {
+	mock.Mock
 }
 
-type dummyServiceData struct {
+func (mp *mockProducer) SendMessage(message kafka.FTMessage) error {
+	args := mp.Called(message)
+	return args.Error(0)
 }
 
-func (dS dummyService) Write(contentUUID string, thing interface{}) error {
-	if dS.failValidation {
-		return annotations.ValidationError{"TEST failing validation"}
-	}
-	if dS.failWrite {
-		return errors.New("TEST failing to WRITE")
-	}
-	return nil
+type mockConsumer struct {
+	message kafka.FTMessage
+	err     error
 }
 
-func (dS dummyService) Read(contentUUID string) (interface{}, bool, error) {
-	if dS.failRead {
-		return nil, false, errors.New("TEST failing to READ")
-	}
-	if contentUUID == dS.contentUUID {
-		return []dummyServiceData{}, true, nil
-	}
-	return nil, false, nil
+func (mc mockConsumer) StartListening(messageHandler func(message kafka.FTMessage) error) {
+	messageHandler(mc.message)
 }
 
-func (dS dummyService) Delete(contentUUID string) (bool, error) {
-	if dS.failDelete {
-		return false, errors.New("TEST failing to DELETE")
-	}
-	if contentUUID == dS.contentUUID {
-		return true, nil
-	}
-	return false, nil
+func (mc mockConsumer) Shutdown() {
+	return
 }
 
-func (dS dummyService) Check() error {
-	return nil
+func (mc mockConsumer) ConnectivityCheck() error {
+	return mc.err
 }
 
-func (dS dummyService) DecodeJSON(*json.Decoder) (interface{}, error) {
-	if dS.failParse {
-		return "", errors.New("TEST failing to DECODE")
-	}
-	return dummyServiceData{}, nil
+type mockAnnotationsService struct {
+	mock.Mock
 }
 
-func (dS dummyService) Count() (int, error) {
-	if dS.failCount {
-		return 0, errors.New("TEST failing to COUNT")
-	}
-	return 2, nil
+func (as *mockAnnotationsService) Write(contentUUID string, thing interface{}) (err error) {
+	args := as.Called(contentUUID, thing)
+	return args.Error(0)
 }
-
-func (dS dummyService) Initialise() error {
-	return nil
+func (as *mockAnnotationsService) Read(contentUUID string) (thing interface{}, found bool, err error) {
+	args := as.Called(contentUUID)
+	return args.Get(0), args.Bool(1), args.Error(2)
 }
-
-func healthHandler(http.ResponseWriter, *http.Request) {
+func (as *mockAnnotationsService) Delete(contentUUID string) (found bool, err error) {
+	args := as.Called(contentUUID)
+	return args.Bool(0), args.Error(1)
+}
+func (as *mockAnnotationsService) Check() (err error) {
+	args := as.Called()
+	return args.Error(0)
+}
+func (as *mockAnnotationsService) DecodeJSON(decoder *json.Decoder) (thing interface{}, err error) {
+	args := as.Called(decoder)
+	return args.Get(0), args.Error(1)
+}
+func (as *mockAnnotationsService) Count() (int, error) {
+	args := as.Called()
+	return args.Int(0), args.Error(1)
+}
+func (as *mockAnnotationsService) Initialise() error {
+	args := as.Called()
+	return args.Error(0)
 }
