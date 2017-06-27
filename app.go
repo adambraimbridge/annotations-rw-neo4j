@@ -16,6 +16,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -145,26 +147,26 @@ func main() {
 			hh = httpHandlers{annotationsService, producer, *forward}
 		}
 
-		if queueAvailable {
-			queueHandler := queueHandler{annotationsService, consumer, producer, *forward}
-			go queueHandler.Ingest()
-		}
-
-		hc := healthCheckHandler{annotationsService, consumer}
-		r := router(hh, hc)
-		http.Handle("/", r)
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
+		hc := healthCheckHandler{annotationsService, consumer}
+		http.Handle("/", router(hh, hc))
+		go startServer(*port)
 
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-			log.Fatalf("Unable to start server: %v", err)
+		var qh queueHandler
+		if queueAvailable {
+			qh = queueHandler{annotationsService, consumer, producer, *forward}
+			go qh.Ingest()
+
+			waitForSignal()
+			log.Info("Shutting down Kafka consumer")
+			qh.consumer.Shutdown()
 		}
-
 	}
 	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
 }
 
-func router(hh httpHandlers, hc healthCheckHandler) http.Handler {
+func router(hh httpHandlers, hc healthCheckHandler) *mux.Router {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
 	// Then API specific ones:
@@ -184,5 +186,17 @@ func router(hh httpHandlers, hc healthCheckHandler) http.Handler {
 	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), monitoringRouter)
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
-	return monitoringRouter
+	return servicesRouter
+}
+
+func startServer(port int) {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+		log.Fatalf("Unable to start server: %v", err)
+	}
+}
+
+func waitForSignal() {
+	ch := make(chan os.Signal)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	<-ch
 }

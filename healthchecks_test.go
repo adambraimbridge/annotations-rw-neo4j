@@ -41,7 +41,6 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Annotati
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{}}
 	rec := httptest.NewRecorder()
 	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
-	fmt.Println(rec.Body.String())
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 	assert.Contains(suite.T(), rec.Body.String(), `"ok":false`)
 }

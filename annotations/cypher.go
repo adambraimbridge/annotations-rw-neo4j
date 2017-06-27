@@ -75,18 +75,18 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
 		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v", contentUUID, query.Statement, err)
-		return annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
+		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
 	log.Debugf("CypherResult Read Annotations for uuid: %s was: %+v", contentUUID, results)
 	if (len(results)) == 0 {
-		return annotations{}, false, nil
+		return Annotations{}, false, nil
 	}
 
 	for idx := range results {
 		mapToResponseFormat(&results[idx])
 	}
 
-	return annotations(results), true, nil
+	return Annotations(results), true, nil
 }
 
 //Delete removes all the annotations for this content. Ignore the nodes on either end -
@@ -109,7 +109,7 @@ func (s service) Delete(contentUUID string) (bool, error) {
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
 func (s service) Write(contentUUID string, thing interface{}) (err error) {
-	annotationsToWrite := thing.(annotations)
+	annotationsToWrite := thing.(Annotations)
 
 	if contentUUID == "" {
 		return errors.New("Content uuid is required")
@@ -318,7 +318,7 @@ func buildDeleteQuery(contentUUID string, annotationLifecycle string, includeSta
 	return &query
 }
 
-func validateAnnotations(annotations *annotations) error {
+func validateAnnotations(annotations *Annotations) error {
 	//TODO - for consistency, we should probably just not create the annotation?
 	for _, annotation := range *annotations {
 		if annotation.Thing.ID == "" {

@@ -1,7 +1,7 @@
 package annotations
 
 //Annotations represents a collection of Annotation instances
-type annotations []Annotation
+type Annotations []Annotation
 
 //Annotation is the main struct used to create and return structures
 type Annotation struct {

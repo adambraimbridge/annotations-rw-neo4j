@@ -1,7 +1,7 @@
 package annotations
 
 var (
-	conceptWithoutAgent = annotations{Annotation{
+	conceptWithoutAgent = Annotations{Annotation{
 		Thing: Thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
@@ -20,7 +20,7 @@ var (
 			},
 		},
 	}}
-	conceptWithoutID = annotations{Annotation{
+	conceptWithoutID = Annotations{Annotation{
 		Thing: Thing{
 			PrefLabel: "prefLabel",
 			Types: []string{
@@ -102,7 +102,7 @@ var (
 			},
 		},
 	}
-	multiConceptAnnotations = annotations{Annotation{
+	multiConceptAnnotations = Annotations{Annotation{
 		Thing: Thing{ID: getURI(conceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
@@ -141,8 +141,8 @@ var (
 	}}
 )
 
-func exampleConcepts(uuid string) annotations {
-	return annotations{exampleConcept(uuid)}
+func exampleConcepts(uuid string) Annotations {
+	return Annotations{exampleConcept(uuid)}
 }
 
 func exampleConcept(uuid string) Annotation {

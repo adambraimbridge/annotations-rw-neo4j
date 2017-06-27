@@ -32,8 +32,8 @@ type queueHandler struct {
 
 // annotationsMessage represents a message ingested from the queue
 type queueMessage struct {
-	UUID    string      `json:"uuid,omitempty"`
-	Payload interface{} `json:"annotations,omitempty"`
+	UUID    string                  `json:"uuid,omitempty"`
+	Payload annotations.Annotations `json:"annotations,omitempty"`
 }
 
 const dateFormat = "2006-01-02T03:04:05.000Z0700"
@@ -98,7 +98,7 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (hh *httpHandlers) forwardMessage(u string, tid string, originSystem string, annotations interface{}) error {
+func (hh *httpHandlers) forwardMessage(u string, tid string, originSystem string, annotations annotations.Annotations) error {
 	headers := createHeader(tid, originSystem)
 	body, err := json.Marshal(queueMessage{u, annotations})
 	if err != nil {
@@ -204,7 +204,6 @@ func (qh queueHandler) Ingest() {
 			return errors.Wrapf(err, "Cannot read message body for %s", tid)
 		}
 
-		//write received message to neo4j
 		err = qh.AnnotationsService.Write(annotationMessage.UUID, annotationMessage.Payload)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)

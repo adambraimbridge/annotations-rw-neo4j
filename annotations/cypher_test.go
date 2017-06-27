@@ -45,7 +45,7 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 
 	anns, found, err := annotationsDriver.Read(contentUUID)
 
-	assert.Equal(annotations{}, anns, "Found annotation for content %s when it should have been deleted", contentUUID)
+	assert.Equal(Annotations{}, anns, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.False(found, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.NoError(err, "Error trying to find annotation for content %s", contentUUID)
 
@@ -474,7 +474,7 @@ func getAnnotationsService(t *testing.T, platformVersion string, annotationLifec
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []Annotation) {
 	assert := assert.New(t)
 	storedThings, found, err := annotationsDriver.Read(contentUUID)
-	storedAnnotations := storedThings.(annotations)
+	storedAnnotations := storedThings.(Annotations)
 
 	assert.NoError(err, "Error finding annotations for contentUUID %s", contentUUID)
 	assert.True(found, "Didn't find annotations for contentUUID %s", contentUUID)
