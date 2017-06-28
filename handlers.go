@@ -228,8 +228,8 @@ func createHeader(tid string, originSystem string) map[string]string {
 	}
 }
 
-func decode(body io.Reader) ([]annotations.Annotation, error) {
-	var anns []annotations.Annotation
+func decode(body io.Reader) (annotations.Annotations, error) {
+	var anns annotations.Annotations
 	err := json.NewDecoder(body).Decode(&anns)
 	return anns, err
 }
