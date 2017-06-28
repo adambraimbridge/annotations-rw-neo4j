@@ -22,7 +22,7 @@ const knownUUID = "12345"
 type HttpHandlerTestSuite struct {
 	suite.Suite
 	body               []byte
-	annotations        []annotations.Annotation
+	annotations        annotations.Annotations
 	annotationsService *mockAnnotationsService
 	producer           *mockProducer
 	message            kafka.FTMessage

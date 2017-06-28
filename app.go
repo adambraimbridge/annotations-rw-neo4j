@@ -141,7 +141,7 @@ func main() {
 		producer, err := kafka.NewProducer(*brokerAddress, *producerTopic)
 		if err != nil {
 			queueAvailable = false
-			log.Error("Cannot start queur producer")
+			log.Error("Cannot start queue producer")
 			hh = httpHandlers{annotationsService, nil, *forward}
 		} else {
 			hh = httpHandlers{annotationsService, producer, *forward}
