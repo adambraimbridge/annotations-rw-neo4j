@@ -20,14 +20,12 @@ import (
 type httpHandlers struct {
 	AnnotationsService annotations.Service
 	producer           kafka.Producer
-	forward            bool
 }
 
 type queueHandler struct {
 	AnnotationsService annotations.Service
 	consumer           kafka.Consumer
 	producer           kafka.Producer
-	forward            bool
 }
 
 // annotationsMessage represents a message ingested from the queue
@@ -82,11 +80,11 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	originSystem := r.Header.Get("X-Origin-System-Id")
-	if hh.producer != nil && hh.forward {
-		err = hh.forwardMessage(uuid, tid, originSystem, anns)
+	if hh.producer != nil {
+		err = hh.forwardMessage(queueMessage{uuid, anns}, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
-			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid, "error": err}).Error(msg)
+			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid, "error": err.Error()}).Error(msg)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(jsonMessage(msg)))
 			return
@@ -98,14 +96,13 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (hh *httpHandlers) forwardMessage(u string, tid string, originSystem string, annotations annotations.Annotations) error {
+func (hh *httpHandlers) forwardMessage(queueMessage queueMessage, tid string, originSystem string) error {
 	headers := createHeader(tid, originSystem)
-	body, err := json.Marshal(queueMessage{u, annotations})
+	body, err := json.Marshal(queueMessage)
 	if err != nil {
 		return err
 	}
-	message := kafka.NewFTMessage(headers, string(body))
-	return hh.producer.SendMessage(message)
+	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 
 // GetAnnotations returns a view of the annotations written - it is NOT the public annotations API, and
@@ -193,24 +190,25 @@ func (qh queueHandler) Ingest() {
 	qh.consumer.StartListening(func(message kafka.FTMessage) error {
 		annotationMessage := new(queueMessage)
 
-		tid, found := message.Headers["X-Request-Id"]
+		tid, found := message.Headers[transactionidutils.TransactionIDHeader]
 		if !found {
 			return errors.New("Missing transaction id from message")
 		}
 
-		log.WithFields(map[string]interface{}{"tid": tid}).Infof("Received write request %s from queue", tid)
 		err := json.Unmarshal([]byte(message.Body), &annotationMessage)
 		if err != nil {
 			return errors.Wrapf(err, "Cannot read message body for %s", tid)
 		}
 
+		log.WithFields(map[string]interface{}{"tid": tid, "uuid": annotationMessage.UUID}).Info("Start processing request from queue")
 		err = qh.AnnotationsService.Write(annotationMessage.UUID, annotationMessage.Payload)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)
 		}
 
 		//forward message to next queue
-		if qh.producer != nil && qh.forward {
+		if qh.producer != nil {
+			log.WithFields(map[string]interface{}{"tid": tid, "uuid": annotationMessage.UUID}).Info("Forwarding message to next queue")
 			return qh.producer.SendMessage(message)
 		}
 		return nil

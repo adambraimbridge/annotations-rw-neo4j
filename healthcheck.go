@@ -15,7 +15,10 @@ type healthCheckHandler struct {
 }
 
 func (h *healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Request) {
-	checks := []fthealth.Check{h.readQueueCheck(), h.writerCheck()}
+	checks := []fthealth.Check{h.writerCheck()}
+	if h.consumer != nil {
+		checks = append(checks, h.readQueueCheck())
+	}
 	hc := fthealth.HealthCheck{
 		SystemCode:  "annotation-rw",
 		Name:        "annotation-rw",

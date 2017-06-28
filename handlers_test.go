@@ -57,7 +57,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
 	request.Header.Add("X-Origin-System_Id", "test_origin_system")
-	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: true}
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer}
 	rec := httptest.NewRecorder()
 	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusCreated == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
@@ -67,7 +67,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ParseError() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", []byte(`{"id": "1234"}`))
-	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer}
 	rec := httptest.NewRecorder()
 	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
@@ -75,7 +75,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_ParseError() {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ValidationError() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", []byte(`"{"thing": {"prefLabel": "Apple"}`))
-	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer}
 	rec := httptest.NewRecorder()
 	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
@@ -83,7 +83,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_ValidationError() {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_NotJson() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "text/html", suite.body)
-	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer}
 	rec := httptest.NewRecorder()
 	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
@@ -93,7 +93,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_NotJson() {
 func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
 	suite.annotationsService.On("Write", knownUUID, suite.annotations).Return(errors.New("Write failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", suite.body)
-	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: false}
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer}
 	rec := httptest.NewRecorder()
 	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
@@ -105,7 +105,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
 	request.Header.Add("X-Origin-System_Id", "test_origin_system")
-	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer, forward: true}
+	httpHandler := httpHandlers{AnnotationsService: suite.annotationsService, producer: suite.producer}
 	rec := httptest.NewRecorder()
 	router(httpHandler, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusInternalServerError == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusInternalServerError))
@@ -115,7 +115,7 @@ func (suite *HttpHandlerTestSuite) TestGetHandler_Success() {
 	suite.annotationsService.On("Read", knownUUID).Return(suite.annotations, true, nil)
 	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 	expectedResponse, err := json.Marshal(suite.annotations)
 	assert.NoError(suite.T(), err, "")
@@ -126,7 +126,7 @@ func (suite *HttpHandlerTestSuite) TestGetHandler_NotFound() {
 	suite.annotationsService.On("Read", knownUUID).Return(nil, false, nil)
 	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusNotFound == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusNotFound))
 }
 
@@ -134,7 +134,7 @@ func (suite *HttpHandlerTestSuite) TestGetHandler_ReadError() {
 	suite.annotationsService.On("Read", knownUUID).Return(nil, false, errors.New("Read error"))
 	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }
 
@@ -142,7 +142,7 @@ func (suite *HttpHandlerTestSuite) TestDeleteHandler_Success() {
 	suite.annotationsService.On("Delete", knownUUID).Return(true, nil)
 	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusNoContent == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusNoContent))
 }
 
@@ -150,7 +150,7 @@ func (suite *HttpHandlerTestSuite) TestDeleteHandler_NotFound() {
 	suite.annotationsService.On("Delete", knownUUID).Return(false, nil)
 	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusNotFound == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusNotFound))
 }
 
@@ -158,7 +158,7 @@ func (suite *HttpHandlerTestSuite) TestDeleteHandler_DeleteError() {
 	suite.annotationsService.On("Delete", knownUUID).Return(false, errors.New("Delete error"))
 	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations", knownUUID), "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }
 
@@ -166,7 +166,7 @@ func (suite *HttpHandlerTestSuite) TestCount_Success() {
 	suite.annotationsService.On("Count").Return(10, nil)
 	request := newRequest("GET", "/content/annotations/__count", "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 }
 
@@ -174,7 +174,7 @@ func (suite *HttpHandlerTestSuite) TestCount_CountError() {
 	suite.annotationsService.On("Count").Return(0, errors.New("Count error"))
 	request := newRequest("GET", "/content/annotations/__count", "application/json", nil)
 	rec := httptest.NewRecorder()
-	router(httpHandlers{suite.annotationsService, suite.producer, false}, suite.healthCheckHandler).ServeHTTP(rec, request)
+	router(httpHandlers{suite.annotationsService, suite.producer}, suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }
 
@@ -212,7 +212,6 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 		AnnotationsService: suite.annotationsService,
 		consumer:           mockConsumer{message: suite.message},
 		producer:           suite.producer,
-		forward:            true,
 	}
 	qh.Ingest()
 
@@ -220,14 +219,13 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	suite.producer.AssertCalled(suite.T(), "SendMessage", suite.message)
 }
 
-func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ForwardingDisabled() {
+func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
 	suite.annotationsService.On("Write", suite.queueMessage.UUID, suite.queueMessage.Payload).Return(nil)
 
 	qh := queueHandler{
 		AnnotationsService: suite.annotationsService,
 		consumer:           mockConsumer{message: suite.message},
-		producer:           suite.producer,
-		forward:            false,
+		producer:           nil,
 	}
 	qh.Ingest()
 
@@ -243,7 +241,6 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_JsonError() {
 		AnnotationsService: suite.annotationsService,
 		consumer:           mockConsumer{message: message},
 		producer:           suite.producer,
-		forward:            false,
 	}
 	qh.Ingest()
 

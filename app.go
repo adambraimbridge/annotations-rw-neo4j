@@ -83,6 +83,12 @@ func main() {
 		Desc:   "Address of the zookeeper service",
 		EnvVar: "ZOOKEEPER_ADDRESS",
 	})
+	shouldConsumeMessages := app.Bool(cli.BoolOpt{
+		Name:   "shouldConsumeMessages",
+		Value:  false,
+		Desc:   "Boolean value specifying if this service should consume messages from the specified topic",
+		EnvVar: "SHOULD_CONSUME_MESSAGES",
+	})
 	consumerGroup := app.String(cli.StringOpt{
 		Name:   "consumerGroup",
 		Desc:   "Kafka consumer group name",
@@ -104,11 +110,11 @@ func main() {
 		Desc:   "Topic to which received messages will be forwarded",
 		EnvVar: "PRODUCER_TOPIC",
 	})
-
-	forward := app.Bool(cli.BoolOpt{
-		Name:   "forward",
+	shouldForwardMessages := app.Bool(cli.BoolOpt{
+		Name:   "shouldForwardMessages",
+		Value:  false,
 		Desc:   "Decides if annotations messages should be forwarded to next queue",
-		EnvVar: "FORWARD",
+		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
 
 	app.Action = func() {
@@ -131,32 +137,45 @@ func main() {
 		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion, *annotationLifecycle)
 
 		queueAvailable := true
-		consumer, err := kafka.NewConsumer(*zookeeperAddress, *consumerGroup, []string{*consumerTopic}, kafka.DefaultConsumerConfig())
-		if err != nil {
-			queueAvailable = false
-			log.Error("Cannot start queue consumer")
-		}
-
 		var hh httpHandlers
-		producer, err := kafka.NewProducer(*brokerAddress, *producerTopic)
-		if err != nil {
-			queueAvailable = false
-			log.Error("Cannot start queue producer")
-			hh = httpHandlers{annotationsService, nil, *forward}
+		var producer kafka.Producer
+		if *shouldForwardMessages {
+			producer, err := kafka.NewProducer(*brokerAddress, *producerTopic)
+			if err != nil {
+				queueAvailable = false
+				log.Error("Cannot start queue producer. Messages will not be forwarded through HTTP calls.")
+				hh = httpHandlers{annotationsService, nil}
+			} else {
+				hh = httpHandlers{annotationsService, producer}
+			}
 		} else {
-			hh = httpHandlers{annotationsService, producer, *forward}
+			hh = httpHandlers{annotationsService, nil}
 		}
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-		hc := healthCheckHandler{annotationsService, consumer}
+
+		var (
+			consumer kafka.Consumer
+			qh       queueHandler
+			hc       healthCheckHandler
+		)
+		if *shouldConsumeMessages {
+			consumer, err = kafka.NewConsumer(*zookeeperAddress, *consumerGroup, []string{*consumerTopic}, kafka.DefaultConsumerConfig())
+			if err != nil {
+				queueAvailable = false
+				log.Error("Cannot start queue consumer")
+				hc = healthCheckHandler{annotationsService, nil}
+			} else if queueAvailable {
+				hc = healthCheckHandler{annotationsService, consumer}
+				qh = queueHandler{annotationsService, consumer, producer}
+				go qh.Ingest()
+			}
+		}
+
 		http.Handle("/", router(hh, hc))
 		go startServer(*port)
 
-		var qh queueHandler
 		if queueAvailable {
-			qh = queueHandler{annotationsService, consumer, producer, *forward}
-			go qh.Ingest()
-
 			waitForSignal()
 			log.Info("Shutting down Kafka consumer")
 			qh.consumer.Shutdown()
