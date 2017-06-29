@@ -6,7 +6,6 @@ import (
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/service-status-go/gtg"
-	"github.com/pkg/errors"
 	"net/http"
 )
 
@@ -16,7 +15,10 @@ type healthCheckHandler struct {
 }
 
 func (h healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Request) {
-	checks := []fthealth.Check{h.writerCheck(), h.readQueueCheck()}
+	checks := []fthealth.Check{h.writerCheck()}
+	if h.consumer != nil {
+		checks = append(checks, h.readQueueCheck())
+	}
 	hc := fthealth.HealthCheck{
 		SystemCode:  "annotation-rw",
 		Name:        "annotation-rw",
@@ -65,9 +67,6 @@ func (h healthCheckHandler) writerCheck() fthealth.Check {
 }
 
 func (h healthCheckHandler) checkKafkaConnectivity() (string, error) {
-	if h.consumer == nil {
-		return "Error connecting with Kafka", errors.New("Kafka client could not be started")
-	}
 	if err := h.consumer.ConnectivityCheck(); err != nil {
 		return "Error connecting with Kafka", err
 	}

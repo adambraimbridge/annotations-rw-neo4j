@@ -136,18 +136,14 @@ func main() {
 
 		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion, *annotationLifecycle)
 
-		queueAvailable := true
 		var hh httpHandlers
 		var producer kafka.Producer
 		if *shouldForwardMessages {
 			producer, err := kafka.NewProducer(*brokerAddress, *producerTopic)
 			if err != nil {
-				queueAvailable = false
-				log.Error("Cannot start queue producer. Messages will not be forwarded.")
-				hh = httpHandlers{AnnotationsService: annotationsService}
-			} else {
-				hh = httpHandlers{AnnotationsService: annotationsService, producer: producer}
+				log.Fatal("Cannot start queue producer.")
 			}
+			hh = httpHandlers{AnnotationsService: annotationsService, producer: producer}
 		} else {
 			hh = httpHandlers{AnnotationsService: annotationsService}
 		}
@@ -162,20 +158,16 @@ func main() {
 		if *shouldConsumeMessages {
 			consumer, err = kafka.NewConsumer(*zookeeperAddress, *consumerGroup, []string{*consumerTopic}, kafka.DefaultConsumerConfig())
 			if err != nil {
-				queueAvailable = false
-				log.Error("Cannot start queue consumer. Consuming from queue will be disabled.")
-				hc = healthCheckHandler{annotationsService: annotationsService}
-			} else if queueAvailable {
-				hc = healthCheckHandler{annotationsService, consumer}
-				qh = queueHandler{annotationsService, consumer, producer}
-				qh.Ingest()
+				log.Fatal("Cannot start queue consumer")
 			}
+			hc = healthCheckHandler{annotationsService, consumer}
+			qh = queueHandler{annotationsService, consumer, producer}
+			qh.Ingest()
 		} else {
-			queueAvailable = false
 			hc = healthCheckHandler{annotationsService: annotationsService}
 		}
 
-		if queueAvailable {
+		if *shouldConsumeMessages {
 			go func() {
 				waitForSignal()
 				log.Info("Shutting down Kafka consumer")
