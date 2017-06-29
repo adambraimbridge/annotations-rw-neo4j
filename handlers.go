@@ -187,7 +187,7 @@ func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int) {
 }
 
 func (qh queueHandler) Ingest() {
-	qh.consumer.StartListeni\ng(func(message kafka.FTMessage) error {
+	qh.consumer.StartListening(func(message kafka.FTMessage) error {
 		annotationMessage := new(queueMessage)
 
 		tid, found := message.Headers[transactionidutils.TransactionIDHeader]

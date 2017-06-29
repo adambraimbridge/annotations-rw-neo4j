@@ -85,7 +85,7 @@ func main() {
 	})
 	shouldConsumeMessages := app.Bool(cli.BoolOpt{
 		Name:   "shouldConsumeMessages",
-		Value:  true,
+		Value:  false,
 		Desc:   "Boolean value specifying if this service should consume messages from the specified topic",
 		EnvVar: "SHOULD_CONSUME_MESSAGES",
 	})
@@ -112,7 +112,7 @@ func main() {
 	})
 	shouldForwardMessages := app.Bool(cli.BoolOpt{
 		Name:   "shouldForwardMessages",
-		Value:  true,
+		Value:  false,
 		Desc:   "Decides if annotations messages should be forwarded to next queue",
 		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
