@@ -6,6 +6,7 @@ import (
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/service-status-go/gtg"
+	"github.com/pkg/errors"
 	"net/http"
 )
 
@@ -14,11 +15,8 @@ type healthCheckHandler struct {
 	consumer           kafka.Consumer
 }
 
-func (h *healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Request) {
-	checks := []fthealth.Check{h.writerCheck()}
-	if h.consumer != nil {
-		checks = append(checks, h.readQueueCheck())
-	}
+func (h healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Request) {
+	checks := []fthealth.Check{h.writerCheck(), h.readQueueCheck()}
 	hc := fthealth.HealthCheck{
 		SystemCode:  "annotation-rw",
 		Name:        "annotation-rw",
@@ -28,7 +26,7 @@ func (h *healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Reques
 	return fthealth.Handler(hc)
 }
 
-func (h *healthCheckHandler) GTG() gtg.Status {
+func (h healthCheckHandler) GTG() gtg.Status {
 	consumerCheck := func() gtg.Status {
 		return gtgCheck(h.checkKafkaConnectivity)
 	}
@@ -42,19 +40,19 @@ func (h *healthCheckHandler) GTG() gtg.Status {
 	})()
 }
 
-func (h *healthCheckHandler) readQueueCheck() fthealth.Check {
+func (h healthCheckHandler) readQueueCheck() fthealth.Check {
 	return fthealth.Check{
-		ID:               "read-message-queue-proxy-reachable",
-		Name:             "Read Message Queue Proxy Reachable",
+		ID:               "read-message-queue-reachable",
+		Name:             "Read Message Queue Reachable",
 		Severity:         1,
 		BusinessImpact:   "Content V1 Metadata can't be read from queue. This will negatively impact V1 metadata availability.",
-		TechnicalSummary: "Read message queue proxy is not reachable/healthy",
+		TechnicalSummary: "Read message queue is not reachable/healthy",
 		PanicGuide:       "https://dewey.ft.com/",
 		Checker:          h.checkKafkaConnectivity,
 	}
 }
 
-func (h *healthCheckHandler) writerCheck() fthealth.Check {
+func (h healthCheckHandler) writerCheck() fthealth.Check {
 	return fthealth.Check{
 		ID:               "write-message-datastore-reachable",
 		Name:             "Write Message Data Store Reachable",
@@ -66,7 +64,10 @@ func (h *healthCheckHandler) writerCheck() fthealth.Check {
 	}
 }
 
-func (h *healthCheckHandler) checkKafkaConnectivity() (string, error) {
+func (h healthCheckHandler) checkKafkaConnectivity() (string, error) {
+	if h.consumer == nil {
+		return "Error connecting with Kafka", errors.New("Kafka client could not be started")
+	}
 	if err := h.consumer.ConnectivityCheck(); err != nil {
 		return "Error connecting with Kafka", err
 	}
@@ -75,8 +76,9 @@ func (h *healthCheckHandler) checkKafkaConnectivity() (string, error) {
 
 // Checker does more stuff
 //TODO use the shared utility check
-func (hc *healthCheckHandler) Checker() (string, error) {
-	if err := hc.annotationsService.Check(); err != nil {
+func (hc healthCheckHandler) Checker() (string, error) {
+	err := hc.annotationsService.Check()
+	if err = hc.annotationsService.Check(); err != nil {
 		return "Error connecting to neo4j", err
 	}
 	return "Connectivity to neo4j is ok", nil

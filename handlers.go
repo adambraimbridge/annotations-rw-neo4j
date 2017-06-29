@@ -187,7 +187,7 @@ func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int) {
 }
 
 func (qh queueHandler) Ingest() {
-	qh.consumer.StartListening(func(message kafka.FTMessage) error {
+	qh.consumer.StartListeni\ng(func(message kafka.FTMessage) error {
 		annotationMessage := new(queueMessage)
 
 		tid, found := message.Headers[transactionidutils.TransactionIDHeader]
@@ -197,7 +197,7 @@ func (qh queueHandler) Ingest() {
 
 		err := json.Unmarshal([]byte(message.Body), &annotationMessage)
 		if err != nil {
-			return errors.Wrapf(err, "Cannot read message body for %s", tid)
+			return errors.Errorf("Cannot process received message %s", tid)
 		}
 
 		log.WithFields(map[string]interface{}{"tid": tid, "uuid": annotationMessage.UUID}).Info("Start processing request from queue")
