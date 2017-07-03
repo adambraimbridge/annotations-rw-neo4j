@@ -7,7 +7,6 @@ service:
 replicaCount: 2
 image:
   repository: coco/annotations-rw-neo4j
-  version: "" # should be set explicitly at installation
   pullPolicy: IfNotPresent
 resources:
   limits:
