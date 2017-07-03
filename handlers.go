@@ -34,6 +34,18 @@ type queueMessage struct {
 	Payload annotations.Annotations `json:"annotations,omitempty"`
 }
 
+var originMap = map[string]string{
+	"concept-suggestor":                            "annotations-v2",
+	"http://cmdb.ft.com/systems/methode-web-pub":   "annotations-v1",
+	"http://cmdb.ft.com/systems/next-video-editor": "annotations-next-video",
+}
+
+var lifecycleMap = map[string]string{
+	"annotations-v1":         "v1",
+	"annotations-v2":         "v2",
+	"annotations-next-video": "next-video",
+}
+
 const dateFormat = "2006-01-02T03:04:05.000Z0700"
 
 func jsonMessage(msgText string) []byte {
@@ -58,6 +70,21 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	}
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
+	originSystem := r.Header.Get("X-Origin-System-Id")
+	if "" == originSystem {
+		err := errors.New("Missing X-Origini-System-Id header from message")
+		log.Error(err)
+		http.Error(w, string(jsonMessage(err.Error())), http.StatusBadRequest)
+		return
+	}
+
+	annotationLifecycle, platformVersion, err := getSourceFromHeader(originSystem)
+	if err != nil {
+		log.Error(err)
+		http.Error(w, string(jsonMessage(err.Error())), http.StatusBadRequest)
+		return
+	}
+
 	anns, err := decode(r.Body)
 	if err != nil {
 		msg := fmt.Sprintf("Error (%v) parsing annotation request", err)
@@ -65,7 +92,7 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, msg, http.StatusBadRequest)
 		return
 	}
-	err = hh.AnnotationsService.Write(uuid, anns)
+	err = hh.AnnotationsService.Write(uuid, annotationLifecycle, platformVersion, anns)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {
@@ -79,7 +106,6 @@ func (hh *httpHandlers) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
-	originSystem := r.Header.Get("X-Origin-System-Id")
 	if hh.producer != nil {
 		err = hh.forwardMessage(queueMessage{uuid, anns}, tid, originSystem)
 		if err != nil {
@@ -117,7 +143,14 @@ func (hh *httpHandlers) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, "uuid required", http.StatusBadRequest)
 		return
 	}
-	annotations, found, err := hh.AnnotationsService.Read(uuid)
+
+	annotationLifecycle := vars["annotationLifecycle"]
+	if annotationLifecycle == "" {
+		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
+		return
+	}
+
+	annotations, found, err := hh.AnnotationsService.Read(uuid, annotationLifecycle)
 	if err != nil {
 		msg := fmt.Sprintf("Error getting annotations (%v)", err)
 		log.Error(msg)
@@ -146,7 +179,14 @@ func (hh *httpHandlers) DeleteAnnotations(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, "uuid required", http.StatusBadRequest)
 		return
 	}
-	found, err := hh.AnnotationsService.Delete(uuid)
+
+	annotationLifecycle := vars["annotationLifecycle"]
+	if annotationLifecycle == "" {
+		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
+		return
+	}
+
+	found, err := hh.AnnotationsService.Delete(uuid, annotationLifecycle)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -161,7 +201,20 @@ func (hh *httpHandlers) DeleteAnnotations(w http.ResponseWriter, r *http.Request
 }
 
 func (hh *httpHandlers) CountAnnotations(w http.ResponseWriter, r *http.Request) {
-	count, err := hh.AnnotationsService.Count()
+	vars := mux.Vars(r)
+	annotationLifecycle := vars["annotationLifecycle"]
+	if annotationLifecycle == "" {
+		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
+		return
+	}
+
+	platformVersion, found := lifecycleMap[annotationLifecycle]
+	if !found {
+		writeJSONError(w, "platformVersion not found for this annotation lifecycle", http.StatusBadRequest)
+		return
+	}
+
+	count, err := hh.AnnotationsService.Count(annotationLifecycle, platformVersion)
 
 	w.Header().Add("Content-Type", "application/json")
 
@@ -170,7 +223,6 @@ func (hh *httpHandlers) CountAnnotations(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-
 	enc := json.NewEncoder(w)
 
 	if err := enc.Encode(count); err != nil {
@@ -195,13 +247,22 @@ func (qh queueHandler) Ingest() {
 			return errors.New("Missing transaction id from message")
 		}
 
-		err := json.Unmarshal([]byte(message.Body), &annotationMessage)
+		originSystem, found := message.Headers["Origin-System-Id"]
+		if !found {
+			return errors.New("Missing Origini-System-Id header from message")
+		}
+
+		annotationLifecycle, platformVersion, err := getSourceFromHeader(originSystem)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal([]byte(message.Body), &annotationMessage)
 		if err != nil {
 			return errors.Errorf("Cannot process received message %s", tid)
 		}
 
-		log.WithFields(map[string]interface{}{"tid": tid, "uuid": annotationMessage.UUID}).Info("Start processing request from queue")
-		err = qh.AnnotationsService.Write(annotationMessage.UUID, annotationMessage.Payload)
+		err = qh.AnnotationsService.Write(annotationMessage.UUID, annotationLifecycle, platformVersion, annotationMessage.Payload)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)
 		}
@@ -230,4 +291,17 @@ func decode(body io.Reader) (annotations.Annotations, error) {
 	var anns annotations.Annotations
 	err := json.NewDecoder(body).Decode(&anns)
 	return anns, err
+}
+
+func getSourceFromHeader(originSystem string) (string, string, error) {
+	annotationLifecycle, found := originMap[originSystem]
+	if !found {
+		return "", "", errors.Errorf("Annotation Lifecycle not found for origin system id: %s", originSystem)
+	}
+
+	platformVersion, found := lifecycleMap[annotationLifecycle]
+	if !found {
+		return "", "", errors.Errorf("Platform version not found for origin system id: %s and annotation lifecycle: %s", originSystem, annotationLifecycle)
+	}
+	return annotationLifecycle, platformVersion, nil
 }

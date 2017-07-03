@@ -20,19 +20,17 @@ var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 // The problem is that we have a list of things, and the uuid is for a related OTHER thing
 // TODO - move to implement a shared defined Service interface?
 type Service interface {
-	Write(contentUUID string, thing interface{}) (err error)
-	Read(contentUUID string) (thing interface{}, found bool, err error)
-	Delete(contentUUID string) (found bool, err error)
+	Write(contentUUID string, annotationLifecycle string, platformVersion string, thing interface{}) (err error)
+	Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error)
+	Delete(contentUUID string, annotationLifecycle string) (found bool, err error)
 	Check() (err error)
-	Count() (int, error)
+	Count(annotationLifecycle string, platformVersion string) (int, error)
 	Initialise() error
 }
 
 //holds the Neo4j-specific information
 type service struct {
-	conn                neoutils.NeoConnection
-	platformVersion     string
-	annotationLifecycle string
+	conn neoutils.NeoConnection
 }
 
 const (
@@ -41,17 +39,11 @@ const (
 )
 
 //NewCypherAnnotationsService instantiate driver
-func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string, annotationLifecycle string) service {
-	if platformVersion == "" {
-		log.Fatalf("Platform Version was not specified!")
-	}
-	if annotationLifecycle == "" {
-		log.Fatalf("Annotation Lifecycle was not specified!")
-	}
-	return service{cypherRunner, platformVersion, annotationLifecycle}
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection) service {
+	return service{cypherRunner}
 }
 
-func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
+func (s service) Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error) {
 	results := []Annotation{}
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
@@ -69,7 +61,7 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle, "platformVersion": s.platformVersion},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": annotationLifecycle},
 		Result:     &results,
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
@@ -92,9 +84,9 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 //Delete removes all the annotations for this content. Ignore the nodes on either end -
 //may leave nodes that are only 'things' inserted by this writer: clean up
 //as a result of this will need to happen externally if required
-func (s service) Delete(contentUUID string) (bool, error) {
+func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, error) {
 
-	query := buildDeleteQuery(contentUUID, s.annotationLifecycle, true)
+	query := buildDeleteQuery(contentUUID, annotationLifecycle, true)
 
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
@@ -108,7 +100,7 @@ func (s service) Delete(contentUUID string) (bool, error) {
 
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
-func (s service) Write(contentUUID string, thing interface{}) (err error) {
+func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, thing interface{}) (err error) {
 	annotationsToWrite := thing.(Annotations)
 
 	if contentUUID == "" {
@@ -123,11 +115,11 @@ func (s service) Write(contentUUID string, thing interface{}) (err error) {
 		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.annotationLifecycle, false))
+	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
-		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion, s.annotationLifecycle)
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
 			return err
 		}
@@ -145,7 +137,7 @@ func (s service) Check() error {
 	return neoutils.Check(s.conn)
 }
 
-func (s service) Count() (int, error) {
+func (s service) Count(annotationLifecycle string, platformVersion string) (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}
@@ -155,7 +147,7 @@ func (s service) Count() (int, error) {
                 WHERE r.lifecycle = {lifecycle}
                 OR r.lifecycle IS NULL
                 RETURN count(r) as c`,
-		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": s.annotationLifecycle},
+		Parameters: neoism.Props{"platformVersion": platformVersion, "lifecycle": annotationLifecycle},
 		Result:     &results,
 	}
 

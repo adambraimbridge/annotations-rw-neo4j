@@ -65,18 +65,18 @@ func main() {
 		Desc:   "Logging level (DEBUG, INFO, WARN, ERROR)",
 		EnvVar: "LOG_LEVEL",
 	})
-	platformVersion := app.String(cli.StringOpt{
-		Name:   "platformVersion",
-		Value:  "",
-		Desc:   "Annotation source platform. Possible values are: v1 or v2.",
-		EnvVar: "PLATFORM_VERSION",
-	})
-	annotationLifecycle := app.String(cli.StringOpt{
-		Name:   "annotationLifecycle",
-		Value:  "",
-		Desc:   "Annotation lifecycle. ",
-		EnvVar: "ANNOTATION_LIFECYCLE",
-	})
+	// platformVersion := app.String(cli.StringOpt{
+	// 	Name:   "platformVersion",
+	// 	Value:  "",
+	// 	Desc:   "Annotation source platform. Possible values are: v1 or v2.",
+	// 	EnvVar: "PLATFORM_VERSION",
+	// })
+	// annotationLifecycle := app.String(cli.StringOpt{
+	// 	Name:   "annotationLifecycle",
+	// 	Value:  "",
+	// 	Desc:   "Annotation lifecycle. ",
+	// 	EnvVar: "ANNOTATION_LIFECYCLE",
+	// })
 	zookeeperAddress := app.String(cli.StringOpt{
 		Name:   "zookeeperAddress",
 		Value:  "localhost:2181",
@@ -107,12 +107,13 @@ func main() {
 	})
 	producerTopic := app.String(cli.StringOpt{
 		Name:   "producerTopic",
+		Value:  "PostPublicationMetadataEvents",
 		Desc:   "Topic to which received messages will be forwarded",
 		EnvVar: "PRODUCER_TOPIC",
 	})
 	shouldForwardMessages := app.Bool(cli.BoolOpt{
 		Name:   "shouldForwardMessages",
-		Value:  false,
+		Value:  true,
 		Desc:   "Decides if annotations messages should be forwarded to next queue",
 		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
@@ -134,12 +135,12 @@ func main() {
 			log.Fatalf("Error connecting to neo4j %s", err)
 		}
 
-		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion, *annotationLifecycle)
+		annotationsService := annotations.NewCypherAnnotationsService(db)
 
 		var hh httpHandlers
 		var producer kafka.Producer
 		if *shouldForwardMessages {
-			producer, err := kafka.NewProducer(*brokerAddress, *producerTopic)
+			producer, err = kafka.NewProducer(*brokerAddress, *producerTopic)
 			if err != nil {
 				log.Fatal("Cannot start queue producer.")
 			}
@@ -160,8 +161,8 @@ func main() {
 			if err != nil {
 				log.Fatal("Cannot start queue consumer")
 			}
-			hc = healthCheckHandler{annotationsService, consumer}
-			qh = queueHandler{annotationsService, consumer, producer}
+			hc = healthCheckHandler{annotationsService: annotationsService, consumer: consumer}
+			qh = queueHandler{AnnotationsService: annotationsService, consumer: consumer, producer: producer}
 			qh.Ingest()
 		} else {
 			hc = healthCheckHandler{annotationsService: annotationsService}
@@ -187,10 +188,10 @@ func router(hh httpHandlers, hc healthCheckHandler) *mux.Router {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
 	// Then API specific ones:
-	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.GetAnnotations).Methods("GET")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.GetAnnotations).Methods("GET")
 	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
-	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.DeleteAnnotations).Methods("DELETE")
-	servicesRouter.HandleFunc("/content/annotations/__count", hh.CountAnnotations).Methods("GET")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.DeleteAnnotations).Methods("DELETE")
+	servicesRouter.HandleFunc("/content/annotations/{annotationLifecycle}/__count", hh.CountAnnotations).Methods("GET")
 
 	servicesRouter.HandleFunc("/__health", hc.Health()).Methods("GET")
 	servicesRouter.HandleFunc("/__gtg", status.NewGoodToGoHandler(hc.GTG)).Methods("GET")
