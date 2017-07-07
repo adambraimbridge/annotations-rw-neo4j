@@ -6,6 +6,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"encoding/json"
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
@@ -16,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
+	"io/ioutil"
 	"os/signal"
 	"syscall"
 )
@@ -65,18 +67,12 @@ func main() {
 		Desc:   "Logging level (DEBUG, INFO, WARN, ERROR)",
 		EnvVar: "LOG_LEVEL",
 	})
-	// platformVersion := app.String(cli.StringOpt{
-	// 	Name:   "platformVersion",
-	// 	Value:  "",
-	// 	Desc:   "Annotation source platform. Possible values are: v1 or v2.",
-	// 	EnvVar: "PLATFORM_VERSION",
-	// })
-	// annotationLifecycle := app.String(cli.StringOpt{
-	// 	Name:   "annotationLifecycle",
-	// 	Value:  "",
-	// 	Desc:   "Annotation lifecycle. ",
-	// 	EnvVar: "ANNOTATION_LIFECYCLE",
-	// })
+	config := app.String(cli.StringOpt{
+		Name:   "lifecycle-config",
+		Value:  "annotations-config.json",
+		Desc:   "Json Config file - containing two config maps: one for originHeader to lifecycle, another for lifecycle to platformVersion mappings. ",
+		EnvVar: "PLATFORM_VERSION",
+	})
 	zookeeperAddress := app.String(cli.StringOpt{
 		Name:   "zookeeperAddress",
 		Value:  "localhost:2181",
@@ -114,7 +110,7 @@ func main() {
 	shouldForwardMessages := app.Bool(cli.BoolOpt{
 		Name:   "shouldForwardMessages",
 		Value:  true,
-		Desc:   "Decides if annotations messages should be forwarded to next queue",
+		Desc:   "Decides if annotations messages should be forwarded to a post publication queue",
 		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
 
@@ -124,51 +120,33 @@ func main() {
 			log.WithFields(log.Fields{"logLevel": logLevel, "err": err}).Fatal("Incorrect log level")
 		}
 		log.SetLevel(parsedLogLevel)
-
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
-
-		conf := neoutils.DefaultConnectionConfig()
-		conf.BatchSize = *batchSize
-		db, err := neoutils.Connect(*neoURL, conf)
-
-		if err != nil {
-			log.Fatalf("Error connecting to neo4j %s", err)
-		}
-
-		annotationsService := annotations.NewCypherAnnotationsService(db)
-
-		var hh httpHandlers
-		var producer kafka.Producer
-		if *shouldForwardMessages {
-			producer, err = kafka.NewProducer(*brokerAddress, *producerTopic)
-			if err != nil {
-				log.Fatal("Cannot start queue producer.")
-			}
-			hh = httpHandlers{AnnotationsService: annotationsService, producer: producer}
-		} else {
-			hh = httpHandlers{AnnotationsService: annotationsService}
-		}
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
-		var (
-			consumer kafka.Consumer
-			qh       queueHandler
-			hc       healthCheckHandler
-		)
-		if *shouldConsumeMessages {
-			consumer, err = kafka.NewConsumer(*zookeeperAddress, *consumerGroup, []string{*consumerTopic}, kafka.DefaultConsumerConfig())
-			if err != nil {
-				log.Fatal("Cannot start queue consumer")
-			}
-			hc = healthCheckHandler{annotationsService: annotationsService, consumer: consumer}
-			qh = queueHandler{AnnotationsService: annotationsService, consumer: consumer, producer: producer}
-			qh.Ingest()
-		} else {
-			hc = healthCheckHandler{annotationsService: annotationsService}
+		annotationsService := setupAnnotationsService(*neoURL, *batchSize)
+		healtcheckHandler := healthCheckHandler{annotationsService: annotationsService}
+		httpHandler := httpHandler{annotationsService: annotationsService}
+
+		originMap, lifecycleMap := readConfigMap(*config)
+		httpHandler.originMap = originMap
+		httpHandler.lifecycleMap = lifecycleMap
+
+		var p kafka.Producer
+		if *shouldForwardMessages {
+			p = setupMessageProducer(*brokerAddress, *producerTopic)
+			httpHandler.producer = p
 		}
 
 		if *shouldConsumeMessages {
+			consumer := setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
+			healtcheckHandler.consumer = consumer
+
+			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
+			qh.originMap = originMap
+			qh.lifecycleMap = lifecycleMap
+			qh.Ingest()
+
 			go func() {
 				waitForSignal()
 				log.Info("Shutting down Kafka consumer")
@@ -176,7 +154,7 @@ func main() {
 			}()
 		}
 
-		http.Handle("/", router(hh, hc))
+		http.Handle("/", router(&httpHandler, &healtcheckHandler))
 		startServer(*port)
 
 	}
@@ -184,12 +162,61 @@ func main() {
 	app.Run(os.Args)
 }
 
-func router(hh httpHandlers, hc healthCheckHandler) *mux.Router {
+func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
+	conf := neoutils.DefaultConnectionConfig()
+	conf.BatchSize = bathSize
+	db, err := neoutils.Connect(neoURL, conf)
+
+	if err != nil {
+		log.Fatalf("Error connecting to neo4j %s", err)
+	}
+
+	return annotations.NewCypherAnnotationsService(db)
+}
+
+func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
+	producer, err := kafka.NewProducer(brokerAddress, producerTopic)
+	if err != nil {
+		log.Fatal("Cannot start queue producer.")
+	}
+	return producer
+}
+
+func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
+	consumer, err := kafka.NewConsumer(zookeeperAddress, consumerGroup, []string{topic}, kafka.DefaultConsumerConfig())
+	if err != nil {
+		log.Fatal("Cannot start queue consumer")
+	}
+	return consumer
+}
+
+func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap map[string]string) {
+
+	file, e := ioutil.ReadFile(jsonPath)
+	if e != nil {
+		log.Fatal("Error reading config file", e)
+	}
+
+	type config struct {
+		OriginMap    map[string]string `json:"originMap"`
+		LifecycleMap map[string]string `json:"lifecycleMap"`
+	}
+	var c config
+	e = json.Unmarshal(file, &c)
+	if e != nil {
+		log.Fatal("Error marshalling config file", e)
+	}
+
+	return c.OriginMap, c.LifecycleMap
+}
+
+func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
+
 	// Then API specific ones:
 	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.GetAnnotations).Methods("GET")
-	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.PutAnnotations).Methods("PUT")
 	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.DeleteAnnotations).Methods("DELETE")
 	servicesRouter.HandleFunc("/content/annotations/{annotationLifecycle}/__count", hh.CountAnnotations).Methods("GET")
 

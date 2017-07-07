@@ -13,12 +13,12 @@ import (
 type HealthCheckHandletTestSuite struct {
 	suite.Suite
 	annotationsService *mockAnnotationsService
-	httpHandler        httpHandlers
+	httpHandler        httpHandler
 }
 
 func (suite *HealthCheckHandletTestSuite) SetupTest() {
 	suite.annotationsService = new(mockAnnotationsService)
-	suite.httpHandler = httpHandlers{}
+	suite.httpHandler = httpHandler{}
 }
 func TestHealthCheckHandletTestSuite(t *testing.T) {
 	suite.Run(t, new(HealthCheckHandletTestSuite))
@@ -30,7 +30,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Success(
 	assert.NoError(suite.T(), err, "Unexpected error")
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{}}
 	rec := httptest.NewRecorder()
-	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 }
 
@@ -40,7 +40,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Annotati
 	assert.NoError(suite.T(), err, "Unexpected error")
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{}}
 	rec := httptest.NewRecorder()
-	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 	assert.Contains(suite.T(), rec.Body.String(), `"ok":false`)
 }
@@ -51,7 +51,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Consumer
 	assert.NoError(suite.T(), err, "Unexpected error")
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{err: errors.New("consumer error")}}
 	rec := httptest.NewRecorder()
-	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 	assert.Contains(suite.T(), rec.Body.String(), `"ok":false`)
 }
@@ -62,7 +62,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_Success() {
 	assert.NoError(suite.T(), err, "Unexpected error")
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{}}
 	rec := httptest.NewRecorder()
-	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 }
 
@@ -72,7 +72,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_Annotations
 	assert.NoError(suite.T(), err, "Unexpected error")
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{}}
 	rec := httptest.NewRecorder()
-	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	fmt.Println(rec.Body.String())
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }
@@ -83,7 +83,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_ConsumerNot
 	assert.NoError(suite.T(), err, "Unexpected error")
 	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: mockConsumer{err: errors.New("consumer error")}}
 	rec := httptest.NewRecorder()
-	router(suite.httpHandler, healthCheckHandler).ServeHTTP(rec, req)
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 
 }

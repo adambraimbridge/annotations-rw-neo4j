@@ -27,7 +27,7 @@ See help text for other arguments._
 ## Endpoints
 
 ### PUT
-/content/{annotatedContentId}/annotations
+/content/{annotatedContentId}/annotations/{annotations-lifecycle}
 
 Each annotation is added with a relationship according to the predicate property from the payload.
 If that is empty: a default MENTIONS relationship will be added between the content and a concept.
@@ -49,7 +49,7 @@ See [this doc](https://docs.google.com/document/d/1FE-JZDYJlKsxOIuQQkPwyyzcOkJQn
 
 Example:
 
-    curl -XPUT -H "X-Request-Id: 123" -H "Content-Type: application/json" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations --data
+    curl -XPUT -H "X-Request-Id: 123" -H "Content-Type: application/json" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations/annotations-v1 --data
     "@annotations/examplePutBody.json"
 
 NB: Although provenances are supplied is a list, we don't expect to get more than one provenance: we will take the scores from that one
@@ -59,22 +59,22 @@ If there is no provenance, or the provenance is incomplete (e.g. no agent role) 
 create the relationship, it just won't have score, agent and time properties.
 
 ### GET
-/content/{annotatedContentId}/annotations
+/content/{annotatedContentId}/annotations/{annotations-lifecycle}
 This internal read should return what got written (i.e., this isn't the public annotations read API) - for the specified platformVersion.
 
 If not found, you'll get a 404 response.
 
 Empty fields are omitted from the response.
-`curl -H "X-Request-Id: 123" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations`
+`curl -H "X-Request-Id: 123" localhost:8080/content/3fa70485-3a57-3b9b-9449-774b001cd965/annotations/annotations-v1`
 
 ### DELETE
-/content/{contentId}/annotations/
+/content/{contentId}/annotations/{annotations-lifecycle}
 
 Deletes all the annotations with the specified platformVersion.
 
 Will return 204 if successful, 404 if not found
 
-`curl -XDELETE -H "X-Request-Id: 123" localhost:8080/3fa70485-3a57-3b9b-9449-774b001cd965/annotations`
+`curl -XDELETE -H "X-Request-Id: 123" localhost:8080/3fa70485-3a57-3b9b-9449-774b001cd965/annotations/annotations-v1`
 
 NB: /content/{contentId}/annotations/mentions/{conceptId} also existed in the old annotations writer and was used to allow annotations to be removed in Spyglass (however it was not used because if the content is republished, we lose the fact an annotation was deleted). We have chosen not to replicate
 that functionality in this app.
