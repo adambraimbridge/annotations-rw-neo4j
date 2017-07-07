@@ -24,8 +24,8 @@ RUN apk --no-cache --virtual .build-dependencies add git \
   && go get -v \
   && go build -ldflags="${LDFLAGS}" \
   && mv ${PROJECT} /${PROJECT} \
-  && mv annotations-config.json /${PROJECT} \
-  && mv suggestions-config.json /${PROJECT} \
+  && mv annotation-config.json /${PROJECT} \
+  && mv suggestion-config.json /${PROJECT} \
   && apk del .build-dependencies \
   && rm -rf $GOPATH /var/cache/apk/*
 
