@@ -460,7 +460,7 @@ func getAnnotationsService(t *testing.T) service {
 	assert := assert.New(t)
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
-		url = "http://neo4j:neo4jnew@localhost:7474/db/data"
+		url = "http://localhost:7474/db/data"
 	}
 
 	conf := neoutils.DefaultConnectionConfig()

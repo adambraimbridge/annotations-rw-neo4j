@@ -26,7 +26,7 @@ func main() {
 
 	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.String(cli.StringOpt{
-		Name:   "neo-url",
+		Name:   "neoUrl",
 		Value:  "http://localhost:7474/db/data",
 		Desc:   "neo4j endpoint URL",
 		EnvVar: "NEO_URL",
@@ -62,13 +62,13 @@ func main() {
 		EnvVar: "LOG_METRICS",
 	})
 	logLevel := app.String(cli.StringOpt{
-		Name:   "log-level",
+		Name:   "logLevel",
 		Value:  "INFO",
 		Desc:   "Logging level (DEBUG, INFO, WARN, ERROR)",
 		EnvVar: "LOG_LEVEL",
 	})
 	config := app.String(cli.StringOpt{
-		Name:   "lifecycle-config-path",
+		Name:   "lifecycleConfigPath",
 		Value:  "annotation-config.json",
 		Desc:   "Json Config file - containing two config maps: one for originHeader to lifecycle, another for lifecycle to platformVersion mappings. ",
 		EnvVar: "LIFECYCLE_CONFIG_PATH",

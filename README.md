@@ -1,7 +1,9 @@
 # Annotations Reader/Writer for Neo4j (annotations-rw-neo4j)
 [![Circle CI](https://circleci.com/gh/Financial-Times/annotations-rw-neo4j.svg?style=shield)](https://circleci.com/gh/Financial-Times/annotations-rw-neo4j)[![Go Report Card](https://goreportcard.com/badge/github.com/Financial-Times/annotations-rw-neo4j)](https://goreportcard.com/report/github.com/Financial-Times/annotations-rw-neo4j) [![Coverage Status](https://coveralls.io/repos/github/Financial-Times/annotations-rw-neo4j/badge.svg)](https://coveralls.io/github/Financial-Times/annotations-rw-neo4j)
 
-__An API for reading/writing annotations into Neo4j. Expects the annotations json supplied to be in the format that comes out of the annotations consumer.__
+__A service and an API for reading/writing annotations into Neo4j. 
+If the consumer is enabled: the messages are consumed from the queue, they get written into Neo4j, and finally, if the producer is also enabled, they got forwarded into the next (PostAnnotations) queue.
+The above flow can be initiated by the PUT endpoint as well. In this case, the service expects the annotations json to be supplied in the format that comes out of the annotations consumer.__
 
 ## Build & deployment etc:
 *TODO*
@@ -11,18 +13,17 @@ _NB You will need to tag a commit in order to build, since the UI asks for a tag
 * [Deploy to Test](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-deploy-test/)
 * [Deploy to Prod](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-deploy-prod/)
 
-## Installation & running locally
-* `go get -u github.com/Financial-Times/annotations-private-rw`
-* `cd $GOPATH/src/github.com/Financial-Times/annotations-private-rw`
-* `go test ./...`
+## Installation
+* `go get -u github.com/kardianos/govendor`
+* `go get -u github.com/Financial-Times/annotations-rw-neo4j`
+* `cd $GOPATH/src/github.com/Financial-Times/annotations-rw-neo4j`
+* `govendor sync`
+* `go build .`
+
+## Running locally
+* `govendor test -v -race`
 * `go install`
-* `$GOPATH/bin/annotations-private-rw --neo-url={neo4jUrl} --port={port} --log-level={DEBUG|INFO|WARN|ERROR}`
-_Except platformVersion, all arguments are optional.
---neo-url defaults to http://localhost:7474/db/data, which is the out of box url for a local neo4j instance.
---port defaults to 8080.
---log-level defaults to INFO
---platformVersion should have one of v1 or v2
-See help text for other arguments._
+* `$GOPATH/bin/annotations-rw-neo4j [--help]`
 
 ## Endpoints
 
@@ -32,9 +33,7 @@ See help text for other arguments._
 Each annotation is added with a relationship according to the predicate property from the payload.
 If that is empty: a default MENTIONS relationship will be added between the content and a concept.
 
-This operation acts as a replace - all existing annotations are removed, and the new ones are created - for the specified platformVersion. This is because we get these
-annotations wholesale from the concept extraction service, which annotates the whole content on each publish.
-
+This operation acts as a replace - all existing annotations are removed, and the new ones are created - for the specified annotations-lifecycle.
 Supplying an empty list as the request body will remove all annotations for the content.
 
 A successful PUT results in 201.
@@ -60,7 +59,7 @@ create the relationship, it just won't have score, agent and time properties.
 
 ### GET
 /content/{annotatedContentId}/annotations/{annotations-lifecycle}
-This internal read should return what got written (i.e., this isn't the public annotations read API) - for the specified platformVersion.
+This internal read should return what got written (i.e., this isn't the public annotations read API) - for the specified annotations-lifecycle.
 
 If not found, you'll get a 404 response.
 
@@ -70,7 +69,7 @@ Empty fields are omitted from the response.
 ### DELETE
 /content/{contentId}/annotations/{annotations-lifecycle}
 
-Deletes all the annotations with the specified platformVersion.
+Deletes all the annotations with the specified annotations-lifecycle.
 
 Will return 204 if successful, 404 if not found
 

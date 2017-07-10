@@ -17,7 +17,10 @@ import (
 	"time"
 )
 
-const dateFormat = "2006-01-02T03:04:05.000Z0700"
+const (
+	dateFormat = "2006-01-02T03:04:05.000Z0700"
+	annotationLifecycle = "annotationLifecycle"
+)
 
 //service def
 type httpHandler struct {
@@ -39,16 +42,16 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	annotationLifecycle := vars["annotationLifecycle"]
-	if annotationLifecycle == "" {
+	lifecycle := vars[annotationLifecycle]
+	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
 		return
-	} else if _, ok := hh.lifecycleMap[annotationLifecycle]; !ok {
+	} else if _, ok := hh.lifecycleMap[lifecycle]; !ok {
 		writeJSONError(w, "annotationLifecycle not supported by this application", http.StatusBadRequest)
 		return
 	}
 
-	annotations, found, err := hh.annotationsService.Read(uuid, annotationLifecycle)
+	annotations, found, err := hh.annotationsService.Read(uuid, lifecycle)
 	if err != nil {
 		msg := fmt.Sprintf("Error getting annotations (%v)", err)
 		log.Error(msg)
@@ -77,16 +80,16 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	annotationLifecycle := vars["annotationLifecycle"]
-	if annotationLifecycle == "" {
+	lifecycle := vars[annotationLifecycle]
+	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
 		return
-	} else if _, ok := hh.lifecycleMap[annotationLifecycle]; !ok {
+	} else if _, ok := hh.lifecycleMap[lifecycle]; !ok {
 		writeJSONError(w, "annotationLifecycle not supported by this application", http.StatusBadRequest)
 		return
 	}
 
-	found, err := hh.annotationsService.Delete(uuid, annotationLifecycle)
+	found, err := hh.annotationsService.Delete(uuid, lifecycle)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -102,22 +105,22 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 
 func (hh *httpHandler) CountAnnotations(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	annotationLifecycle := vars["annotationLifecycle"]
-	if annotationLifecycle == "" {
+	lifecycle := vars[annotationLifecycle]
+	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
 		return
-	} else if _, ok := hh.lifecycleMap[annotationLifecycle]; !ok {
+	} else if _, ok := hh.lifecycleMap[lifecycle]; !ok {
 		writeJSONError(w, "annotationLifecycle not supported by this application", http.StatusBadRequest)
 		return
 	}
 
-	platformVersion, found := hh.lifecycleMap[annotationLifecycle]
+	platformVersion, found := hh.lifecycleMap[lifecycle]
 	if !found {
 		writeJSONError(w, "platformVersion not found for this annotation lifecycle", http.StatusBadRequest)
 		return
 	}
 
-	count, err := hh.annotationsService.Count(annotationLifecycle, platformVersion)
+	count, err := hh.annotationsService.Count(lifecycle, platformVersion)
 
 	w.Header().Add("Content-Type", "application/json")
 
@@ -150,13 +153,13 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	annotationLifecycle := vars["annotationLifecycle"]
-	if annotationLifecycle == "" {
-		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
+	lifecycle := vars[annotationLifecycle]
+	if lifecycle == "" {
+		writeJSONError(w, "annotationLifecycle required for uuid %s"+uuid, http.StatusBadRequest)
 		return
 	}
 
-	platformVersion, ok := hh.lifecycleMap[annotationLifecycle]
+	platformVersion, ok := hh.lifecycleMap[lifecycle]
 	if !ok {
 		writeJSONError(w, "annotationLifecycle not supported by this application", http.StatusBadRequest)
 		return
@@ -169,7 +172,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, msg, http.StatusBadRequest)
 		return
 	}
-	err = hh.annotationsService.Write(uuid, annotationLifecycle, platformVersion, anns)
+	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, anns)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {
@@ -186,13 +189,13 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	if hh.producer != nil {
 		var originSystem string
 		for k, v := range hh.originMap {
-			if v == annotationLifecycle {
+			if v == lifecycle {
 				originSystem = k
 				break
 			}
 		}
 		if originSystem == "" {
-			writeJSONError(w, "no origin system id could be deduced for the lifecycle parameter", http.StatusBadRequest)
+			writeJSONError(w, "no origin-system-id could be deduced for the lifecycle parameter", http.StatusBadRequest)
 			return
 		}
 
