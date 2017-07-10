@@ -69,7 +69,7 @@ func main() {
 	})
 	config := app.String(cli.StringOpt{
 		Name:   "lifecycle-config-path",
-		Value:  "annotations-config.json",
+		Value:  "annotation-config.json",
 		Desc:   "Json Config file - containing two config maps: one for originHeader to lifecycle, another for lifecycle to platformVersion mappings. ",
 		EnvVar: "LIFECYCLE_CONFIG_PATH",
 	})
