@@ -19,7 +19,7 @@ import (
 
 const (
 	dateFormat = "2006-01-02T03:04:05.000Z0700"
-	annotationLifecycle = "annotationLifecycle"
+	lifecyclePropertyName = "annotationLifecycle"
 )
 
 //service def
@@ -42,7 +42,7 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lifecycle := vars[annotationLifecycle]
+	lifecycle := vars[lifecyclePropertyName]
 	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
 		return
@@ -80,7 +80,7 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	lifecycle := vars[annotationLifecycle]
+	lifecycle := vars[lifecyclePropertyName]
 	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
 		return
@@ -105,7 +105,7 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 
 func (hh *httpHandler) CountAnnotations(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	lifecycle := vars[annotationLifecycle]
+	lifecycle := vars[lifecyclePropertyName]
 	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required", http.StatusBadRequest)
 		return
@@ -153,7 +153,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lifecycle := vars[annotationLifecycle]
+	lifecycle := vars[lifecyclePropertyName]
 	if lifecycle == "" {
 		writeJSONError(w, "annotationLifecycle required for uuid %s"+uuid, http.StatusBadRequest)
 		return
@@ -172,7 +172,9 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, msg, http.StatusBadRequest)
 		return
 	}
-	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, anns)
+
+	tid := transactionidutils.GetTransactionIDFromRequest(r)
+	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, tid, anns)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {
@@ -185,7 +187,6 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	if hh.producer != nil {
 		var originSystem string
 		for k, v := range hh.originMap {

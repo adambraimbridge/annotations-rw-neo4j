@@ -33,6 +33,7 @@ type HttpHandlerTestSuite struct {
 	healthCheckHandler healthCheckHandler
 	originMap          map[string]string
 	lifecycleMap       map[string]string
+	tid 		   string
 }
 
 func (suite *HttpHandlerTestSuite) SetupTest() {
@@ -45,8 +46,9 @@ func (suite *HttpHandlerTestSuite) SetupTest() {
 
 	suite.annotationsService = new(mockAnnotationsService)
 	suite.producer = new(mockProducer)
+	suite.tid = "tid_sample"
 
-	headers := createHeader("tid_sample", "http://cmdb.ft.com/systems/methode-web-pub")
+	headers := createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
 	msgBody, err := json.Marshal(queueMessage{knownUUID, suite.annotations})
 	assert.NoError(suite.T(), err, "Unexpected error")
 	suite.message = kafka.NewFTMessage(headers, string(msgBody))
@@ -61,7 +63,7 @@ func TestHttpHandlerTestSuite(t *testing.T) {
 }
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
-	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.annotations).Return(nil)
+	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(nil)
 	suite.producer.On("SendMessage", mock.Anything).Return(nil).Once()
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
@@ -100,7 +102,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_NotJson() {
 }
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
-	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.annotations).Return(errors.New("Write failed"))
+	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(errors.New("Write failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
 	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap}
@@ -110,7 +112,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
 }
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {
-	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.annotations).Return(nil)
+	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(nil)
 	suite.producer.On("SendMessage", mock.Anything).Return(errors.New("Forwarding failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
@@ -232,8 +234,8 @@ type mockAnnotationsService struct {
 	mock.Mock
 }
 
-func (as *mockAnnotationsService) Write(contentUUID string, annotationLifecycle string, platformVersion string, thing interface{}) (err error) {
-	args := as.Called(contentUUID, annotationLifecycle, platformVersion, thing)
+func (as *mockAnnotationsService) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error) {
+	args := as.Called(contentUUID, annotationLifecycle, platformVersion, tid, thing)
 	return args.Error(0)
 }
 func (as *mockAnnotationsService) Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error) {

@@ -20,11 +20,14 @@ type QueueHandlerTestSuite struct {
 	producer           *mockProducer
 	originMap          map[string]string
 	lifecycleMap       map[string]string
+	tid string
 }
 
 func (suite *QueueHandlerTestSuite) SetupTest() {
 	var err error
-	suite.headers = createHeader("tid_sample", "http://cmdb.ft.com/systems/methode-web-pub")
+
+	suite.tid = "tid_sample"
+	suite.headers = createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
 	assert.NoError(suite.T(), err, "Unexpected error")
 	suite.message = kafka.NewFTMessage(suite.headers, string(suite.body))
@@ -41,7 +44,7 @@ func TestQueueHandlerTestSuite(t *testing.T) {
 }
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
-	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.queueMessage.Payload).Return(nil)
+	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion,suite.tid, suite.queueMessage.Payload).Return(nil)
 	suite.producer.On("SendMessage", suite.message).Return(nil)
 
 	qh := &queueHandler{
@@ -53,12 +56,12 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	}
 	qh.Ingest()
 
-	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.queueMessage.Payload)
+	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion,suite.tid, suite.queueMessage.Payload)
 	suite.producer.AssertCalled(suite.T(), "SendMessage", suite.message)
 }
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
-	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.queueMessage.Payload).Return(nil)
+	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Payload).Return(nil)
 
 	qh := queueHandler{
 		annotationsService: suite.annotationsService,
@@ -69,7 +72,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
 	}
 	qh.Ingest()
 
-	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.queueMessage.Payload)
+	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Payload)
 	suite.producer.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
 }
 

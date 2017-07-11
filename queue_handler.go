@@ -47,7 +47,7 @@ func (qh *queueHandler) Ingest() {
 			return errors.Errorf("Cannot process received message %s", tid)
 		}
 
-		err = qh.annotationsService.Write(annotationMessage.UUID, annotationLifecycle, platformVersion, annotationMessage.Payload)
+		err = qh.annotationsService.Write(annotationMessage.UUID, annotationLifecycle, platformVersion, tid, annotationMessage.Payload)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)
 		}

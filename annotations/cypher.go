@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"time"
-
-	"errors"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
@@ -20,7 +18,7 @@ var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 // The problem is that we have a list of things, and the uuid is for a related OTHER thing
 // TODO - move to implement a shared defined Service interface?
 type Service interface {
-	Write(contentUUID string, annotationLifecycle string, platformVersion string, thing interface{}) (err error)
+	Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error)
 	Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error)
 	Delete(contentUUID string, annotationLifecycle string) (found bool, err error)
 	Check() (err error)
@@ -100,19 +98,19 @@ func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, e
 
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
-func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, thing interface{}) (err error) {
+func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error) {
 	annotationsToWrite := thing.(Annotations)
 
 	if contentUUID == "" {
-		return errors.New("Content uuid is required")
+		return fmt.Errorf("%s Content uuid is required", tid)
 	}
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
-		log.Warnf("Validation of supplied annotations failed")
+		log.Warnf("%s Validation of supplied annotations failed", tid)
 		return err
 	}
 
 	if len(annotationsToWrite) == 0 {
-		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
+		log.Warnf("%s No new annotations supplied for content uuid: %s", tid, contentUUID)
 	}
 
 	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
@@ -126,8 +124,8 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
-	log.Infof("Updated Annotations for content uuid: %s", contentUUID)
-	log.Debugf("For update, ran statements: %+v", statements)
+	log.Infof("%s Updated Annotations for content uuid: %s", tid, contentUUID)
+	log.Debugf("%s For update, ran statements: %+v", tid, statements)
 
 	return s.conn.CypherBatch(queries)
 }
