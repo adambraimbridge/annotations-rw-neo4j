@@ -20,7 +20,7 @@ type QueueHandlerTestSuite struct {
 	producer           *mockProducer
 	originMap          map[string]string
 	lifecycleMap       map[string]string
-	tid string
+	tid                string
 }
 
 func (suite *QueueHandlerTestSuite) SetupTest() {
@@ -36,7 +36,7 @@ func (suite *QueueHandlerTestSuite) SetupTest() {
 	suite.annotationsService = new(mockAnnotationsService)
 	suite.producer = new(mockProducer)
 
-	suite.originMap, suite.lifecycleMap = readConfigMap("annotation-config.json")
+	suite.originMap, suite.lifecycleMap, _ = readConfigMap("annotation-config.json")
 }
 
 func TestQueueHandlerTestSuite(t *testing.T) {
@@ -44,7 +44,7 @@ func TestQueueHandlerTestSuite(t *testing.T) {
 }
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
-	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion,suite.tid, suite.queueMessage.Payload).Return(nil)
+	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Payload).Return(nil)
 	suite.producer.On("SendMessage", suite.message).Return(nil)
 
 	qh := &queueHandler{
@@ -56,7 +56,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	}
 	qh.Ingest()
 
-	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion,suite.tid, suite.queueMessage.Payload)
+	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Payload)
 	suite.producer.AssertCalled(suite.T(), "SendMessage", suite.message)
 }
 

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	dateFormat = "2006-01-02T03:04:05.000Z0700"
+	dateFormat            = "2006-01-02T03:04:05.000Z0700"
 	lifecyclePropertyName = "annotationLifecycle"
 )
 
@@ -28,6 +28,7 @@ type httpHandler struct {
 	producer           kafka.Producer
 	originMap          map[string]string
 	lifecycleMap       map[string]string
+	messageType        string
 }
 
 // GetAnnotations returns a view of the annotations written - it is NOT the public annotations API, and
@@ -200,7 +201,10 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = hh.forwardMessage(queueMessage{uuid, anns}, tid, originSystem)
+		payload := map[string]interface{}{
+			hh.messageType: anns,
+		}
+		err = hh.forwardMessage(queueMessage{uuid, payload}, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
 			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid, "error": err.Error()}).Error(msg)

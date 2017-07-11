@@ -19,8 +19,8 @@ type queueHandler struct {
 
 // annotationsMessage represents a message ingested from the queue
 type queueMessage struct {
-	UUID    string                  `json:"uuid,omitempty"`
-	Payload annotations.Annotations `json:"annotations,omitempty"`
+	UUID    string `json:"uuid,omitempty"`
+	Payload map[string]interface{}
 }
 
 func (qh *queueHandler) Ingest() {
@@ -36,7 +36,7 @@ func (qh *queueHandler) Ingest() {
 			return errors.New("Missing Origini-System-Id header from message")
 		}
 
-		annotationLifecycle, platformVersion, err := qh.getSourceFromHeader(originSystem)
+		lifecycle, platformVersion, err := qh.getSourceFromHeader(originSystem)
 		if err != nil {
 			return err
 		}
@@ -47,7 +47,7 @@ func (qh *queueHandler) Ingest() {
 			return errors.Errorf("Cannot process received message %s", tid)
 		}
 
-		err = qh.annotationsService.Write(annotationMessage.UUID, annotationLifecycle, platformVersion, tid, annotationMessage.Payload)
+		err = qh.annotationsService.Write(annotationMessage.UUID, lifecycle, platformVersion, tid, annotationMessage.Payload)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)
 		}

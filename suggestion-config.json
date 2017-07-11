@@ -4,5 +4,6 @@
   },
   "lifecycleMap": {
     "annotations-v2": "v2"
-  }
+  },
+  "messageType": "suggestions"
 }

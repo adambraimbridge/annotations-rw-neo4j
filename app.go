@@ -126,11 +126,12 @@ func main() {
 
 		annotationsService := setupAnnotationsService(*neoURL, *batchSize)
 		healtcheckHandler := healthCheckHandler{annotationsService: annotationsService}
-		httpHandler := httpHandler{annotationsService: annotationsService}
+		originMap, lifecycleMap, messageType := readConfigMap(*config)
 
-		originMap, lifecycleMap := readConfigMap(*config)
+		httpHandler := httpHandler{annotationsService: annotationsService}
 		httpHandler.originMap = originMap
 		httpHandler.lifecycleMap = lifecycleMap
+		httpHandler.messageType = messageType
 
 		var p kafka.Producer
 		if *shouldForwardMessages {
@@ -190,7 +191,7 @@ func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic s
 	return consumer
 }
 
-func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap map[string]string) {
+func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap map[string]string, messageType string) {
 
 	file, e := ioutil.ReadFile(jsonPath)
 	if e != nil {
@@ -200,6 +201,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	type config struct {
 		OriginMap    map[string]string `json:"originMap"`
 		LifecycleMap map[string]string `json:"lifecycleMap"`
+		MessageType  string            `json:"messageType"`
 	}
 	var c config
 	e = json.Unmarshal(file, &c)
@@ -207,7 +209,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 		log.Fatal("Error marshalling config file", e)
 	}
 
-	return c.OriginMap, c.LifecycleMap
+	return c.OriginMap, c.LifecycleMap, c.MessageType
 }
 
 func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
