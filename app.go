@@ -146,7 +146,6 @@ func main() {
 			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
 			qh.originMap = originMap
 			qh.lifecycleMap = lifecycleMap
-			qh.messageType = messageType
 			qh.Ingest()
 
 			go func() {
