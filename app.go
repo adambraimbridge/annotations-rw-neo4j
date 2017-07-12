@@ -146,6 +146,7 @@ func main() {
 			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
 			qh.originMap = originMap
 			qh.lifecycleMap = lifecycleMap
+			qh.messageType = messageType
 			qh.Ingest()
 
 			go func() {
@@ -207,6 +208,10 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	e = json.Unmarshal(file, &c)
 	if e != nil {
 		log.Fatal("Error marshalling config file", e)
+	}
+
+	if c.MessageType == "" {
+		log.Fatal("Message type is not configured.")
 	}
 
 	return c.OriginMap, c.LifecycleMap, c.MessageType

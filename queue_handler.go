@@ -15,12 +15,7 @@ type queueHandler struct {
 	producer           kafka.Producer
 	originMap          map[string]string
 	lifecycleMap       map[string]string
-}
-
-// annotationsMessage represents a message ingested from the queue
-type queueMessage struct {
-	UUID    string `json:"uuid,omitempty"`
-	Payload map[string]interface{}
+	messageType        string
 }
 
 func (qh *queueHandler) Ingest() {
@@ -41,20 +36,30 @@ func (qh *queueHandler) Ingest() {
 			return err
 		}
 
-		annotationMessage := new(queueMessage)
+		var annotationMessage map[string]interface{}
 		err = json.Unmarshal([]byte(message.Body), &annotationMessage)
 		if err != nil {
 			return errors.Errorf("Cannot process received message %s", tid)
 		}
 
-		err = qh.annotationsService.Write(annotationMessage.UUID, lifecycle, platformVersion, tid, annotationMessage.Payload)
+		uuid := annotationMessage["uuid"].(string)
+		if uuid == "" {
+			return errors.Errorf("Cannot find `uuid` field in the received message for tid %s. Message will be ignored. ", tid)
+		}
+
+		annotationMsg := annotationMessage[qh.messageType]
+		if annotationMsg == nil {
+			return errors.Errorf("Cannot find `%s` field in the received message for tid %s. Message will be ignored. ", qh.messageType, tid)
+		}
+
+		err = qh.annotationsService.Write(uuid, lifecycle, platformVersion, tid, annotationMsg)
 		if err != nil {
-			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annotationMessage.UUID)
+			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, uuid)
 		}
 
 		//forward message to the next queue
 		if qh.producer != nil {
-			log.WithFields(map[string]interface{}{"tid": tid, "uuid": annotationMessage.UUID}).Info("Forwarding message to the next queue")
+			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid}).Info("Forwarding message to the next queue")
 			return qh.producer.SendMessage(message)
 		}
 		return nil

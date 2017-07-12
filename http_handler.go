@@ -201,10 +201,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		payload := map[string]interface{}{
-			hh.messageType: anns,
-		}
-		err = hh.forwardMessage(queueMessage{uuid, payload}, tid, originSystem)
+		err = hh.forwardMessage(uuid, anns, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
 			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid, "error": err.Error()}).Error(msg)
@@ -219,9 +216,15 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (hh *httpHandler) forwardMessage(queueMessage queueMessage, tid string, originSystem string) error {
+func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations, tid string, originSystem string) error {
+
+	msg := map[string]interface{}{
+		"uuid":         uuid,
+		hh.messageType: anns,
+	}
+
 	headers := createHeader(tid, originSystem)
-	body, err := json.Marshal(queueMessage)
+	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}

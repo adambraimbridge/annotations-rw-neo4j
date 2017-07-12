@@ -50,7 +50,7 @@ func (suite *HttpHandlerTestSuite) SetupTest() {
 	suite.tid = "tid_sample"
 
 	headers := createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
-	msgBody, err := json.Marshal(queueMessage{knownUUID, map[string]interface{}{suite.messageType: suite.annotations}})
+	msgBody, err := json.Marshal(map[string]interface{}{"uuid": knownUUID, suite.messageType: suite.annotations})
 	assert.NoError(suite.T(), err, "Unexpected error")
 	suite.message = kafka.NewFTMessage(headers, string(msgBody))
 	suite.healthCheckHandler = healthCheckHandler{}
