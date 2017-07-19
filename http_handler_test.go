@@ -187,7 +187,6 @@ func (suite *HttpHandlerTestSuite) TestCount_CountError() {
 	request := newRequest("GET", fmt.Sprintf("/content/annotations/%s/__count", annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}
-	fmt.Printf("hey: %v", handler.lifecycleMap)
 	router(&handler, &suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/jmcvetta/neoism"
 	"regexp"
 	"time"
+	"encoding/json"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
@@ -22,6 +23,7 @@ type Service interface {
 	Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error)
 	Delete(contentUUID string, annotationLifecycle string) (found bool, err error)
 	Check() (err error)
+	DecodeJSON(*json.Decoder) (thing interface{}, err error)
 	Count(annotationLifecycle string, platformVersion string) (int, error)
 	Initialise() error
 }
@@ -39,6 +41,13 @@ const (
 //NewCypherAnnotationsService instantiate driver
 func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection) service {
 	return service{cypherRunner}
+}
+
+// DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
+func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
+	a := Annotations{}
+	err := dec.Decode(&a)
+	return a, err
 }
 
 func (s service) Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error) {
