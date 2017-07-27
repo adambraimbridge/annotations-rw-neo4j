@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/transactionid-utils-go"
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 )
 
@@ -52,9 +52,11 @@ func (qh *queueHandler) Ingest() {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annMsg.UUID)
 		}
 
+		logger.MonitoringEventWithUUID("annotations-write", tid, annMsg.UUID, "annotations", "annotations successfully written in Neo4j")
+
 		//forward message to the next queue
 		if qh.producer != nil {
-			log.WithFields(map[string]interface{}{"tid": tid, "uuid": annMsg.UUID}).Info("Forwarding message to the next queue")
+			logger.InfoEventWithUUID(tid, annMsg.UUID, "Forwarding message to the next queue")
 			return qh.producer.SendMessage(message)
 		}
 		return nil

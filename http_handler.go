@@ -3,17 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
-
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/transactionid-utils-go"
-	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/twinj/uuid"
 	"io"
+	"net/http"
+	"strings"
 	"time"
 )
 
@@ -55,7 +54,6 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 	annotations, found, err := hh.annotationsService.Read(uuid, lifecycle)
 	if err != nil {
 		msg := fmt.Sprintf("Error getting annotations (%v)", err)
-		log.Error(msg)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
@@ -63,8 +61,8 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, fmt.Sprintf("No annotations found for content with uuid %s.", uuid), http.StatusNotFound)
 		return
 	}
-	Jason, _ := json.Marshal(annotations)
-	log.Debugf("Annotations for content (uuid:%s): %s\n", Jason)
+	annotationJson, _ := json.Marshal(annotations)
+	logger.Debugf(nil, "Annotations for content (uuid:%s): %s\n", annotationJson)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(annotations)
@@ -126,14 +124,12 @@ func (hh *httpHandler) CountAnnotations(w http.ResponseWriter, r *http.Request) 
 	w.Header().Add("Content-Type", "application/json")
 
 	if err != nil {
-		log.Errorf("Error on read=%v\n", err)
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	enc := json.NewEncoder(w)
 
 	if err := enc.Encode(count); err != nil {
-		log.Errorf("Error on json encoding=%v\n", err)
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -143,7 +139,6 @@ func (hh *httpHandler) CountAnnotations(w http.ResponseWriter, r *http.Request) 
 func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	if err := isContentTypeJSON(r); err != nil {
-		log.Error(err)
 		http.Error(w, string(jsonMessage(err.Error())), http.StatusBadRequest)
 		return
 	}
@@ -169,7 +164,6 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	anns, err := decode(r.Body)
 	if err != nil {
 		msg := fmt.Sprintf("Error (%v) parsing annotation request", err)
-		log.Info(msg)
 		writeJSONError(w, msg, http.StatusBadRequest)
 		return
 	}
@@ -179,14 +173,14 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {
-			log.Error(msg)
 			writeJSONError(w, msg, http.StatusBadRequest)
 			return
 		}
-		log.Error(msg)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
+
+	logger.MonitoringEventWithUUID("annotations-write", tid, uuid, hh.messageType, fmt.Sprint("%s successfully written in Neo4j", hh.messageType))
 
 	if hh.producer != nil {
 		var originSystem string
@@ -204,7 +198,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		err = hh.forwardMessage(uuid, anns, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
-			log.WithFields(map[string]interface{}{"tid": tid, "uuid": uuid, "error": err.Error()}).Error(msg)
+			logger.ErrorEventWithUUID(tid, uuid, msg, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(jsonMessage(msg)))
 			return
@@ -228,6 +222,8 @@ func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations,
 	if err != nil {
 		return err
 	}
+
+	logger.InfoEventWithUUID(tid, uuid, "Forwarding message to the next queue")
 	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 

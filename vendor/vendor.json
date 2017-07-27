@@ -15,6 +15,12 @@
 			"revisionTime": "2017-05-25T09:50:41Z"
 		},
 		{
+			"checksumSHA1": "brQde5gsC23qL6iB16jBCObkorw=",
+			"path": "github.com/Financial-Times/go-logger",
+			"revision": "4183059476f42de82e9192636df5c0824be7a171",
+			"revisionTime": "2017-07-26T12:18:30Z"
+		},
+		{
 			"checksumSHA1": "zUpINnstJChGK0LAtkt7jBc3RY0=",
 			"path": "github.com/Financial-Times/http-handlers-go/httphandlers",
 			"revision": "bb69c454da9050fe1c4b92fe1345a01583ee70be",
@@ -73,12 +79,6 @@
 			"path": "github.com/Shopify/sarama",
 			"revision": "f7e3024a61603647461f4b40bd8f3db88871bf9d",
 			"revisionTime": "2017-06-15T15:11:31Z"
-		},
-		{
-			"checksumSHA1": "DYv6Q1+VfnUVxMwvk5IshAClLvw=",
-			"path": "github.com/Sirupsen/logrus",
-			"revision": "5e5dc898656f695e2a086b8e12559febbfc01562",
-			"revisionTime": "2017-05-15T10:45:16Z"
 		},
 		{
 			"checksumSHA1": "/6H1rhQmbq8mEP29pnmLmdwBKUE=",

@@ -9,11 +9,11 @@ import (
 	"encoding/json"
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
-	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
@@ -22,9 +22,11 @@ import (
 	"syscall"
 )
 
+const serviceName = "annotations-rw-neo4j"
+
 func main() {
 
-	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
+	app := cli.App(serviceName, "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neoUrl",
 		Value:  "http://localhost:7474/db/data",
@@ -115,12 +117,8 @@ func main() {
 	})
 
 	app.Action = func() {
-		parsedLogLevel, err := log.ParseLevel(*logLevel)
-		if err != nil {
-			log.WithFields(log.Fields{"logLevel": logLevel, "err": err}).Fatal("Incorrect log level")
-		}
-		log.SetLevel(parsedLogLevel)
-		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
+		logger.InitLogger(serviceName, *logLevel)
+		logger.Infof(map[string]interface{}{"port": *port, "neoURL": *neoURL}, "Service %s has successfully started.", serviceName)
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
@@ -150,7 +148,7 @@ func main() {
 
 			go func() {
 				waitForSignal()
-				log.Info("Shutting down Kafka consumer")
+				logger.Infof(nil, "Shutting down Kafka consumer")
 				qh.consumer.Shutdown()
 			}()
 		}
@@ -159,7 +157,6 @@ func main() {
 		startServer(*port)
 
 	}
-	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
 }
 
@@ -169,7 +166,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 	db, err := neoutils.Connect(neoURL, conf)
 
 	if err != nil {
-		log.Fatalf("Error connecting to neo4j %s", err)
+		logger.FatalEvent("Error connecting to neo4j %s", err)
 	}
 
 	return annotations.NewCypherAnnotationsService(db)
@@ -178,7 +175,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
 	producer, err := kafka.NewProducer(brokerAddress, producerTopic)
 	if err != nil {
-		log.Fatal("Cannot start queue producer.")
+		logger.FatalEvent("Cannot start queue producer.", nil)
 	}
 	return producer
 }
@@ -186,7 +183,7 @@ func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Prod
 func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
 	consumer, err := kafka.NewConsumer(zookeeperAddress, consumerGroup, []string{topic}, kafka.DefaultConsumerConfig())
 	if err != nil {
-		log.Fatal("Cannot start queue consumer")
+		logger.FatalEvent("Cannot start queue consumer", nil)
 	}
 	return consumer
 }
@@ -195,7 +192,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 
 	file, e := ioutil.ReadFile(jsonPath)
 	if e != nil {
-		log.Fatal("Error reading config file", e)
+		logger.FatalEvent("Error reading config file", e)
 	}
 
 	type config struct {
@@ -206,11 +203,11 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	var c config
 	e = json.Unmarshal(file, &c)
 	if e != nil {
-		log.Fatal("Error marshalling config file", e)
+		logger.FatalEvent("Error marshalling config file", e)
 	}
 
 	if c.MessageType == "" {
-		log.Fatal("Message type is not configured.")
+		logger.FatalEvent("Message type is not configured.", nil)
 	}
 
 	return c.OriginMap, c.LifecycleMap, c.MessageType
@@ -234,7 +231,7 @@ func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 	servicesRouter.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler).Methods("GET")
 
 	var monitoringRouter http.Handler = servicesRouter
-	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), monitoringRouter)
+	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(logger.NewLogger(), monitoringRouter)
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
 	return servicesRouter
@@ -242,7 +239,7 @@ func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 
 func startServer(port int) {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-		log.Fatalf("Unable to start server: %v", err)
+		logger.FatalEvent("Unable to start server: %v", err)
 	}
 }
 
