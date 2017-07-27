@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -38,6 +39,7 @@ type HttpHandlerTestSuite struct {
 }
 
 func (suite *HttpHandlerTestSuite) SetupTest() {
+	logger.InitDefaultLogger(serviceName)
 	var err error
 	suite.body, err = ioutil.ReadFile("annotations/examplePutBody.json")
 	assert.NoError(suite.T(), err, "Unexpected error")

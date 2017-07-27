@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -25,7 +26,7 @@ type QueueHandlerTestSuite struct {
 
 func (suite *QueueHandlerTestSuite) SetupTest() {
 	var err error
-
+	logger.InitDefaultLogger(serviceName)
 	suite.tid = "tid_sample"
 	suite.headers = createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
