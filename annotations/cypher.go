@@ -1,14 +1,14 @@
 package annotations
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/Financial-Times/go-logger"
 	"github.com/jmcvetta/neoism"
 	"regexp"
 	"time"
-	"encoding/json"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
@@ -73,10 +73,10 @@ func (s service) Read(contentUUID string, annotationLifecycle string) (thing int
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
-		logger.Errorf(map[string]interface{}{"uuid":contentUUID,"statement":query.Statement}, "Error looking up query with neoism %v", err)
+		logger.Errorf(map[string]interface{}{"uuid": contentUUID, "statement": query.Statement}, "Error looking up query with neoism %v", err)
 		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
-	logger.Debugf(map[string]interface{}{"uuid":contentUUID,"queryResults":results}, "CypherResult Read Annotations for uuid")
+	logger.Debugf(map[string]interface{}{"uuid": contentUUID, "queryResults": results}, "CypherResult Read Annotations for uuid")
 	if (len(results)) == 0 {
 		return Annotations{}, false, nil
 	}
@@ -135,7 +135,7 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		queries = append(queries, query)
 	}
 
-	logger.Debugf(map[string]interface{}{"transaction_id":tid, "statements":statements, "uuid":contentUUID}, "For update, ran statements")
+	logger.Debugf(map[string]interface{}{"transaction_id": tid, "statements": statements, "uuid": contentUUID}, "For update, ran statements")
 	return s.conn.CypherBatch(queries)
 }
 
