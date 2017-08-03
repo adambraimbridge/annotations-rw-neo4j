@@ -15,6 +15,7 @@ type queueHandler struct {
 	producer           kafka.Producer
 	originMap          map[string]string
 	lifecycleMap       map[string]string
+	messageType        string
 }
 
 //Note: this will only work for annotation messages, and not for suggestion
@@ -52,7 +53,7 @@ func (qh *queueHandler) Ingest() {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annMsg.UUID)
 		}
 
-		logger.MonitoringEventWithUUID("annotations-write", tid, annMsg.UUID, "annotations", "annotations successfully written in Neo4j")
+		logger.MonitoringEventWithUUID("SaveNeo4j", tid, annMsg.UUID, qh.messageType, "annotations successfully written in Neo4j")
 
 		//forward message to the next queue
 		if qh.producer != nil {
