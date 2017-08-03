@@ -180,7 +180,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.MonitoringEventWithUUID("annotations-write", tid, uuid, hh.messageType, fmt.Sprintf("%s successfully written in Neo4j", hh.messageType))
+	logger.MonitoringEventWithUUID("SaveNeo4j", tid, uuid, hh.messageType, fmt.Sprintf("%s successfully written in Neo4j", hh.messageType))
 
 	if hh.producer != nil {
 		var originSystem string

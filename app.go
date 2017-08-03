@@ -22,11 +22,9 @@ import (
 	"syscall"
 )
 
-const serviceName = "annotations-rw-neo4j"
-
 func main() {
 
-	app := cli.App(serviceName, "A RESTful API for managing Annotations in neo4j")
+	app := cli.App("annotations-rw", "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neoUrl",
 		Value:  "http://localhost:7474/db/data",
@@ -115,10 +113,16 @@ func main() {
 		Desc:   "Decides if annotations messages should be forwarded to a post publication queue",
 		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
+	appName := app.String(cli.StringOpt{
+		Name:   "appName",
+		Value:  "annotations-rw",
+		Desc:   "Name of the service",
+		EnvVar: "APP_NAME",
+	})
 
 	app.Action = func() {
-		logger.InitLogger(serviceName, *logLevel)
-		logger.Infof(map[string]interface{}{"port": *port, "neoURL": *neoURL}, "Service %s has successfully started.", serviceName)
+		logger.InitLogger(*appName, *logLevel)
+		logger.Infof(map[string]interface{}{"port": *port, "neoURL": *neoURL}, "Service %s has successfully started.", *appName)
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
