@@ -1,0 +1,9 @@
+{
+  "originMap": {
+    "concept-suggestor": "annotations-v2"
+  },
+  "lifecycleMap": {
+    "annotations-v2": "v2"
+  },
+  "messageType": "suggestions"
+}

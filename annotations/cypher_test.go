@@ -25,6 +25,7 @@ const (
 	contentLifecycle          = "content"
 	v2AnnotationLifecycle     = "annotations-v2"
 	v1AnnotationLifecycle     = "annotations-v1"
+	tid                       = "transaction_id"
 )
 
 func getURI(uuid string) string {
@@ -33,19 +34,19 @@ func getURI(uuid string) string {
 
 func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	annotationsToDelete := exampleConcepts(conceptUUID)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToDelete), "Failed to write annotation")
-	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToDelete)
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToDelete), "Failed to write annotation")
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, annotationsToDelete)
 
-	deleted, err := annotationsDriver.Delete(contentUUID)
+	deleted, err := annotationsDriver.Delete(contentUUID, v2AnnotationLifecycle)
 	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s: %s", contentUUID, err)
 	assert.NoError(err, "Error deleting annotation for content uuid %, conceptUUID %s", contentUUID, conceptUUID)
 
-	anns, found, err := annotationsDriver.Read(contentUUID)
+	anns, found, err := annotationsDriver.Read(contentUUID, v2AnnotationLifecycle)
 
-	assert.Equal(annotations{}, anns, "Found annotation for content %s when it should have been deleted", contentUUID)
+	assert.Equal(Annotations{}, anns, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.False(found, "Found annotation for content %s when it should have been deleted", contentUUID)
 	assert.NoError(err, "Error trying to find annotation for content %s", contentUUID)
 
@@ -61,9 +62,9 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 	assert := assert.New(t)
 
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 
-	err := annotationsDriver.Write(contentUUID, conceptWithoutID)
+	err := annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, conceptWithoutID)
 	assert.Error(err, "Should have failed to write annotation")
 	_, ok := err.(ValidationError)
 	assert.True(ok, "Should have returned a validation error")
@@ -71,19 +72,19 @@ func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 
 func TestWriteAllValuesPresent(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToWrite), "Failed to write annotation")
 
-	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, annotationsToWrite)
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, annotationsToWrite)
 
-	cleanUp(t, contentUUID, []string{conceptUUID})
+	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID})
 }
 
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecycle(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	defer cleanDB(t, assert)
 
 	testSetupQuery := &neoism.CypherQuery{
@@ -100,10 +101,10 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{testSetupQuery})
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToWrite), "Failed to write annotation")
 	checkRelationship(assert, contentUUID, "v2")
 
-	deleted, err := annotationsDriver.Delete(contentUUID)
+	deleted, err := annotationsDriver.Delete(contentUUID, v2AnnotationLifecycle)
 	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
@@ -127,7 +128,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLifeCycle(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	defer cleanDB(t, assert)
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
@@ -146,10 +147,10 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, annotationsToWrite), "Failed to write annotation")
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToWrite), "Failed to write annotation")
 	checkRelationship(assert, contentUUID, "v2")
 
-	deleted, err := annotationsDriver.Delete(contentUUID)
+	deleted, err := annotationsDriver.Delete(contentUUID, v2AnnotationLifecycle)
 	assert.True(deleted, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
@@ -174,8 +175,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *testing.T) {
 	assert := assert.New(t)
 
-	v1AnnotationsDriver := getAnnotationsService(t, v1PlatformVersion, v1AnnotationLifecycle)
-	annotationsDriver := getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver := getAnnotationsService(t)
 
 	createContentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (c:Content{uuid:{contentUuid}}) SET c :Thing RETURN c.uuid`,
@@ -201,8 +201,8 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 
 	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
 
-	assert.NoError(v1AnnotationsDriver.Write(contentUUID, exampleConcepts(conceptUUID)), "Failed to write annotation")
-	found, err := v1AnnotationsDriver.Delete(contentUUID)
+	assert.NoError(annotationsDriver.Write(contentUUID, v1AnnotationLifecycle, v1PlatformVersion, tid, exampleConcepts(conceptUUID)), "Failed to write annotation")
+	found, err := annotationsDriver.Delete(contentUUID, v1AnnotationLifecycle)
 	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
@@ -260,20 +260,20 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 
 func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
-	assert.NoError(annotationsDriver.Write(contentUUID, multiConceptAnnotations), "Failed to write annotation")
+	annotationsDriver = getAnnotationsService(t)
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, multiConceptAnnotations), "Failed to write annotation")
 
-	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, multiConceptAnnotations)
-	cleanUp(t, contentUUID, []string{conceptUUID, secondConceptUUID})
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, multiConceptAnnotations)
+	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID, secondConceptUUID})
 }
 
 func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, conceptWithoutAgent), "Failed to write annotation")
-	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, conceptWithoutAgent)
-	cleanUp(t, contentUUID, []string{conceptUUID})
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, conceptWithoutAgent), "Failed to write annotation")
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, conceptWithoutAgent)
+	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID})
 }
 
 // TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
@@ -281,7 +281,7 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	defer cleanDB(t, assert)
 
-	annotationsDriver = getAnnotationsService(t, nextVideoPlatformVersion, nextVideoAnnotationsLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
@@ -298,7 +298,7 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
 	assert.NoError(err, "Error creating test data in database.")
 
-	assert.NoError(annotationsDriver.Write(contentUUID, exampleConcepts(conceptUUID)), "Failed to write annotation.")
+	assert.NoError(annotationsDriver.Write(contentUUID, nextVideoAnnotationsLifecycle, nextVideoPlatformVersion, tid, exampleConcepts(conceptUUID)), "Failed to write annotation.")
 
 	result := []struct {
 		Lifecycle       string `json:"r.lifecycle"`
@@ -323,7 +323,6 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 		assert.Equal(nextVideoPlatformVersion, result[0].PlatformVersion, "Platform version wrong.")
 		assert.Equal(nextVideoAnnotationsLifecycle, result[0].Lifecycle, "Lifecycle wrong.")
 	}
-
 }
 
 // TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
@@ -331,7 +330,7 @@ func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	defer cleanDB(t, assert)
 
-	annotationsDriver = getAnnotationsService(t, nextVideoPlatformVersion, nextVideoAnnotationsLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
@@ -348,7 +347,7 @@ func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
 	assert.NoError(err, "Error creating test data in database.")
 
-	_, err = annotationsDriver.Delete(contentUUID)
+	_, err = annotationsDriver.Delete(contentUUID, nextVideoAnnotationsLifecycle)
 	assert.NoError(err, "Failed to delete annotation.")
 
 	result := []struct {
@@ -375,23 +374,23 @@ func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	oldAnnotationsToWrite := exampleConcepts(oldConceptUUID)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, oldAnnotationsToWrite), "Failed to write annotations")
-	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, oldAnnotationsToWrite)
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, oldAnnotationsToWrite), "Failed to write annotations")
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, oldAnnotationsToWrite)
 
 	updatedAnnotationsToWrite := exampleConcepts(conceptUUID)
 
-	assert.NoError(annotationsDriver.Write(contentUUID, updatedAnnotationsToWrite), "Failed to write updated annotations")
-	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, updatedAnnotationsToWrite)
+	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, updatedAnnotationsToWrite), "Failed to write updated annotations")
+	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, updatedAnnotationsToWrite)
 
-	cleanUp(t, contentUUID, []string{conceptUUID, oldConceptUUID})
+	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID, oldConceptUUID})
 }
 
 func TestConnectivityCheck(t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	err := annotationsDriver.Check()
 	assert.NoError(err, "Unexpected error on connectivity check")
 }
@@ -456,7 +455,7 @@ func TestCreateAnnotationQueryWithHasAuthorPredicate(t *testing.T) {
 	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_AUTHOR!"))
 }
 
-func getAnnotationsService(t *testing.T, platformVersion string, annotationLifecycle string) service {
+func getAnnotationsService(t *testing.T) service {
 	assert := assert.New(t)
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
@@ -468,13 +467,13 @@ func getAnnotationsService(t *testing.T, platformVersion string, annotationLifec
 	db, err := neoutils.Connect(url, conf)
 	assert.NoError(err, "Failed to connect to Neo4j")
 
-	return NewCypherAnnotationsService(db, platformVersion, annotationLifecycle)
+	return NewCypherAnnotationsService(db)
 }
 
-func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, expectedAnnotations []annotation) {
+func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, annotationLifecycle string, expectedAnnotations []Annotation) {
 	assert := assert.New(t)
-	storedThings, found, err := annotationsDriver.Read(contentUUID)
-	storedAnnotations := storedThings.(annotations)
+	storedThings, found, err := annotationsDriver.Read(contentUUID, annotationLifecycle)
+	storedAnnotations := storedThings.(Annotations)
 
 	assert.NoError(err, "Error finding annotations for contentUUID %s", contentUUID)
 	assert.True(found, "Didn't find annotations for contentUUID %s", contentUUID)
@@ -491,7 +490,7 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 
 func checkNodeIsStillPresent(uuid string, t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	results := []struct {
 		UUID string `json:"uuid"`
 	}{}
@@ -513,7 +512,7 @@ func checkNodeIsStillPresent(uuid string, t *testing.T) {
 
 func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
 	assert := assert.New(t)
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	results := []struct {
 		UUID string `json:"uuid"`
 	}{}
@@ -590,9 +589,9 @@ func checkRelationship(assert *assert.Assertions, contentID string, platformVers
 	assert.Equal(1, results[0].Count, "No Relationship with Lifecycle found!")
 }
 
-func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
+func cleanUp(t *testing.T, contentUUID string, annotationLifecycle string, conceptUUIDs []string) {
 	assert := assert.New(t)
-	found, err := annotationsDriver.Delete(contentUUID)
+	found, err := annotationsDriver.Delete(contentUUID, annotationLifecycle)
 	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
@@ -606,7 +605,7 @@ func cleanUp(t *testing.T, contentUUID string, conceptUUIDs []string) {
 }
 
 func cleanDB(t *testing.T, assert *assert.Assertions) {
-	annotationsDriver = getAnnotationsService(t, v2PlatformVersion, v2AnnotationLifecycle)
+	annotationsDriver = getAnnotationsService(t)
 	qs := []*neoism.CypherQuery{
 		{
 			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", contentUUID),

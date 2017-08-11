@@ -6,24 +6,27 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"encoding/json"
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
-	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
+	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/Financial-Times/service-status-go/gtg"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
+	"io/ioutil"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
 
 	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.String(cli.StringOpt{
-		Name:   "neo-url",
+		Name:   "neoUrl",
 		Value:  "http://localhost:7474/db/data",
 		Desc:   "neo4j endpoint URL",
 		EnvVar: "NEO_URL",
@@ -59,22 +62,56 @@ func main() {
 		EnvVar: "LOG_METRICS",
 	})
 	logLevel := app.String(cli.StringOpt{
-		Name:   "log-level",
+		Name:   "logLevel",
 		Value:  "INFO",
 		Desc:   "Logging level (DEBUG, INFO, WARN, ERROR)",
 		EnvVar: "LOG_LEVEL",
 	})
-	platformVersion := app.String(cli.StringOpt{
-		Name:   "platformVersion",
-		Value:  "",
-		Desc:   "Annotation source platform. Possible values are: v1 or v2.",
-		EnvVar: "PLATFORM_VERSION",
+	config := app.String(cli.StringOpt{
+		Name:   "lifecycleConfigPath",
+		Value:  "annotation-config.json",
+		Desc:   "Json Config file - containing two config maps: one for originHeader to lifecycle, another for lifecycle to platformVersion mappings. ",
+		EnvVar: "LIFECYCLE_CONFIG_PATH",
 	})
-	annotationLifecycle := app.String(cli.StringOpt{
-		Name:   "annotationLifecycle",
-		Value:  "",
-		Desc:   "Annotation lifecycle. ",
-		EnvVar: "ANNOTATION_LIFECYCLE",
+	zookeeperAddress := app.String(cli.StringOpt{
+		Name:   "zookeeperAddress",
+		Value:  "localhost:2181",
+		Desc:   "Address of the zookeeper service",
+		EnvVar: "ZOOKEEPER_ADDRESS",
+	})
+	shouldConsumeMessages := app.Bool(cli.BoolOpt{
+		Name:   "shouldConsumeMessages",
+		Value:  false,
+		Desc:   "Boolean value specifying if this service should consume messages from the specified topic",
+		EnvVar: "SHOULD_CONSUME_MESSAGES",
+	})
+	consumerGroup := app.String(cli.StringOpt{
+		Name:   "consumerGroup",
+		Desc:   "Kafka consumer group name",
+		EnvVar: "CONSUMER_GROUP",
+	})
+	consumerTopic := app.String(cli.StringOpt{
+		Name:   "consumerTopic",
+		Desc:   "Kafka consumer topic name",
+		EnvVar: "CONSUMER_TOPIC",
+	})
+	brokerAddress := app.String(cli.StringOpt{
+		Name:   "brokerAddress",
+		Value:  "localhost:9092",
+		Desc:   "Kafka address",
+		EnvVar: "BROKER_ADDRESS",
+	})
+	producerTopic := app.String(cli.StringOpt{
+		Name:   "producerTopic",
+		Value:  "PostPublicationMetadataEvents",
+		Desc:   "Topic to which received messages will be forwarded",
+		EnvVar: "PRODUCER_TOPIC",
+	})
+	shouldForwardMessages := app.Bool(cli.BoolOpt{
+		Name:   "shouldForwardMessages",
+		Value:  true,
+		Desc:   "Decides if annotations messages should be forwarded to a post publication queue",
+		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
 
 	app.Action = func() {
@@ -83,63 +120,134 @@ func main() {
 			log.WithFields(log.Fields{"logLevel": logLevel, "err": err}).Fatal("Incorrect log level")
 		}
 		log.SetLevel(parsedLogLevel)
-
 		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
 
-		conf := neoutils.DefaultConnectionConfig()
-		conf.BatchSize = *batchSize
-		db, err := neoutils.Connect(*neoURL, conf)
-
-		if err != nil {
-			log.Fatalf("Error connecting to neo4j %s", err)
-		}
-
-		annotationsService := annotations.NewCypherAnnotationsService(db, *platformVersion, *annotationLifecycle)
-		httpHandlers := httpHandlers{annotationsService}
-
-		// Healthchecks and standards first
-		http.HandleFunc("/__health", v1a.Handler("Annotations RW Healthchecks",
-			"Checks for accessing neo4j", httpHandlers.HealthCheck()))
-		http.HandleFunc(status.PingPath, status.PingHandler)
-		http.HandleFunc(status.PingPathDW, status.PingHandler)
-		http.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
-		http.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
-
-		gtgChecker := make([]gtg.StatusChecker, 0)
-		gtgChecker = append(gtgChecker, func() gtg.Status {
-			if err := httpHandlers.AnnotationsService.Check(); err != nil {
-				return gtg.Status{GoodToGo: false, Message: err.Error()}
-			}
-
-			return gtg.Status{GoodToGo: true}
-		})
-		http.HandleFunc(status.GTGPath, status.NewGoodToGoHandler(gtg.FailFastParallelCheck(gtgChecker)))
-
-		r := router(httpHandlers)
-		http.Handle("/", r)
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-			log.Fatalf("Unable to start server: %v", err)
+		annotationsService := setupAnnotationsService(*neoURL, *batchSize)
+		healtcheckHandler := healthCheckHandler{annotationsService: annotationsService}
+		originMap, lifecycleMap, messageType := readConfigMap(*config)
+
+		httpHandler := httpHandler{annotationsService: annotationsService}
+		httpHandler.originMap = originMap
+		httpHandler.lifecycleMap = lifecycleMap
+		httpHandler.messageType = messageType
+
+		var p kafka.Producer
+		if *shouldForwardMessages {
+			p = setupMessageProducer(*brokerAddress, *producerTopic)
+			httpHandler.producer = p
 		}
+
+		if *shouldConsumeMessages {
+			consumer := setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
+			healtcheckHandler.consumer = consumer
+
+			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
+			qh.originMap = originMap
+			qh.lifecycleMap = lifecycleMap
+			qh.Ingest()
+
+			go func() {
+				waitForSignal()
+				log.Info("Shutting down Kafka consumer")
+				qh.consumer.Shutdown()
+			}()
+		}
+
+		http.Handle("/", router(&httpHandler, &healtcheckHandler))
+		startServer(*port)
 
 	}
 	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
 }
 
-func router(hh httpHandlers) http.Handler {
+func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
+	conf := neoutils.DefaultConnectionConfig()
+	conf.BatchSize = bathSize
+	db, err := neoutils.Connect(neoURL, conf)
+
+	if err != nil {
+		log.Fatalf("Error connecting to neo4j %s", err)
+	}
+
+	return annotations.NewCypherAnnotationsService(db)
+}
+
+func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
+	producer, err := kafka.NewProducer(brokerAddress, producerTopic)
+	if err != nil {
+		log.Fatal("Cannot start queue producer.")
+	}
+	return producer
+}
+
+func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
+	consumer, err := kafka.NewConsumer(zookeeperAddress, consumerGroup, []string{topic}, kafka.DefaultConsumerConfig())
+	if err != nil {
+		log.Fatal("Cannot start queue consumer")
+	}
+	return consumer
+}
+
+func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap map[string]string, messageType string) {
+
+	file, e := ioutil.ReadFile(jsonPath)
+	if e != nil {
+		log.Fatal("Error reading config file", e)
+	}
+
+	type config struct {
+		OriginMap    map[string]string `json:"originMap"`
+		LifecycleMap map[string]string `json:"lifecycleMap"`
+		MessageType  string            `json:"messageType"`
+	}
+	var c config
+	e = json.Unmarshal(file, &c)
+	if e != nil {
+		log.Fatal("Error marshalling config file", e)
+	}
+
+	if c.MessageType == "" {
+		log.Fatal("Message type is not configured.")
+	}
+
+	return c.OriginMap, c.LifecycleMap, c.MessageType
+}
+
+func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
+
 	// Then API specific ones:
-	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.GetAnnotations).Methods("GET")
-	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.PutAnnotations).Methods("PUT")
-	servicesRouter.HandleFunc("/content/{uuid}/annotations", hh.DeleteAnnotations).Methods("DELETE")
-	servicesRouter.HandleFunc("/content/annotations/__count", hh.CountAnnotations).Methods("GET")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.GetAnnotations).Methods("GET")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.PutAnnotations).Methods("PUT")
+	servicesRouter.HandleFunc("/content/{uuid}/annotations/{annotationLifecycle}", hh.DeleteAnnotations).Methods("DELETE")
+	servicesRouter.HandleFunc("/content/annotations/{annotationLifecycle}/__count", hh.CountAnnotations).Methods("GET")
+
+	servicesRouter.HandleFunc("/__health", hc.Health()).Methods("GET")
+	servicesRouter.HandleFunc("/__gtg", status.NewGoodToGoHandler(hc.GTG)).Methods("GET")
+	servicesRouter.HandleFunc(status.PingPath, status.PingHandler).Methods("GET")
+	servicesRouter.HandleFunc(status.PingPathDW, status.PingHandler).Methods("GET")
+	servicesRouter.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler).Methods("GET")
+	servicesRouter.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler).Methods("GET")
 
 	var monitoringRouter http.Handler = servicesRouter
 	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), monitoringRouter)
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
-	return monitoringRouter
+	return servicesRouter
+}
+
+func startServer(port int) {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+		log.Fatalf("Unable to start server: %v", err)
+	}
+}
+
+func waitForSignal() {
+	ch := make(chan os.Signal)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	<-ch
 }

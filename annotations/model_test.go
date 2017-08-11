@@ -10,7 +10,7 @@ import (
 
 func TestUnMarshallingAnnotation(t *testing.T) {
 	assert := assert.New(t)
-	annotations := annotations{}
+	annotations := Annotations{}
 	jason, err := ioutil.ReadFile("examplePutBody.json")
 	assert.NoError(err, "Unexpected error")
 
@@ -20,7 +20,7 @@ func TestUnMarshallingAnnotation(t *testing.T) {
 
 func TestUnMarshallingAnnotationWithPredicate(t *testing.T) {
 	assert := assert.New(t)
-	annotations := annotations{}
+	annotations := Annotations{}
 	jason, err := ioutil.ReadFile("examplePutBodyWithPredicate.json")
 	assert.NoError(err, "Unexpected error")
 

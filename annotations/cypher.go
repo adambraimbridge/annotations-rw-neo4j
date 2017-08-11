@@ -1,16 +1,14 @@
 package annotations
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"regexp"
-	"time"
-
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
+	"regexp"
+	"time"
+	"encoding/json"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
@@ -21,20 +19,18 @@ var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 // The problem is that we have a list of things, and the uuid is for a related OTHER thing
 // TODO - move to implement a shared defined Service interface?
 type Service interface {
-	Write(contentUUID string, thing interface{}) (err error)
-	Read(contentUUID string) (thing interface{}, found bool, err error)
-	Delete(contentUUID string) (found bool, err error)
+	Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error)
+	Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error)
+	Delete(contentUUID string, annotationLifecycle string) (found bool, err error)
 	Check() (err error)
 	DecodeJSON(*json.Decoder) (thing interface{}, err error)
-	Count() (int, error)
+	Count(annotationLifecycle string, platformVersion string) (int, error)
 	Initialise() error
 }
 
 //holds the Neo4j-specific information
 type service struct {
-	conn                neoutils.NeoConnection
-	platformVersion     string
-	annotationLifecycle string
+	conn neoutils.NeoConnection
 }
 
 const (
@@ -43,25 +39,19 @@ const (
 )
 
 //NewCypherAnnotationsService instantiate driver
-func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, platformVersion string, annotationLifecycle string) service {
-	if platformVersion == "" {
-		log.Fatalf("Platform Version was not specified!")
-	}
-	if annotationLifecycle == "" {
-		log.Fatalf("Annotation Lifecycle was not specified!")
-	}
-	return service{cypherRunner, platformVersion, annotationLifecycle}
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection) service {
+	return service{cypherRunner}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
 func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
-	a := annotations{}
+	a := Annotations{}
 	err := dec.Decode(&a)
 	return a, err
 }
 
-func (s service) Read(contentUUID string) (thing interface{}, found bool, err error) {
-	results := []annotation{}
+func (s service) Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error) {
+	results := []Annotation{}
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
 			MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
@@ -78,32 +68,32 @@ func (s service) Read(contentUUID string) (thing interface{}, found bool, err er
 
 	query := &neoism.CypherQuery{
 		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": s.annotationLifecycle, "platformVersion": s.platformVersion},
+		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": annotationLifecycle},
 		Result:     &results,
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
 		log.Errorf("Error looking up uuid %s with query %s from neoism: %+v", contentUUID, query.Statement, err)
-		return annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
+		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
 	log.Debugf("CypherResult Read Annotations for uuid: %s was: %+v", contentUUID, results)
 	if (len(results)) == 0 {
-		return annotations{}, false, nil
+		return Annotations{}, false, nil
 	}
 
 	for idx := range results {
 		mapToResponseFormat(&results[idx])
 	}
 
-	return annotations(results), true, nil
+	return Annotations(results), true, nil
 }
 
 //Delete removes all the annotations for this content. Ignore the nodes on either end -
 //may leave nodes that are only 'things' inserted by this writer: clean up
 //as a result of this will need to happen externally if required
-func (s service) Delete(contentUUID string) (bool, error) {
+func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, error) {
 
-	query := buildDeleteQuery(contentUUID, s.annotationLifecycle, true)
+	query := buildDeleteQuery(contentUUID, annotationLifecycle, true)
 
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
@@ -117,34 +107,34 @@ func (s service) Delete(contentUUID string) (bool, error) {
 
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
-func (s service) Write(contentUUID string, thing interface{}) (err error) {
-	annotationsToWrite := thing.(annotations)
+func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error) {
+	annotationsToWrite := thing.(Annotations)
 
 	if contentUUID == "" {
-		return errors.New("Content uuid is required")
+		return fmt.Errorf("%s Content uuid is required", tid)
 	}
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
-		log.Warnf("Validation of supplied annotations failed")
+		log.Warnf("%s Validation of supplied annotations failed", tid)
 		return err
 	}
 
 	if len(annotationsToWrite) == 0 {
-		log.Warnf("No new annotations supplied for content uuid: %s", contentUUID)
+		log.Warnf("%s No new annotations supplied for content uuid: %s", tid, contentUUID)
 	}
 
-	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, s.annotationLifecycle, false))
+	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
 
 	var statements = []string{}
 	for _, annotationToWrite := range annotationsToWrite {
-		query, err := createAnnotationQuery(contentUUID, annotationToWrite, s.platformVersion, s.annotationLifecycle)
+		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
 			return err
 		}
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
-	log.Infof("Updated Annotations for content uuid: %s", contentUUID)
-	log.Debugf("For update, ran statements: %+v", statements)
+	log.Infof("%s Updated Annotations for content uuid: %s", tid, contentUUID)
+	log.Debugf("%s For update, ran statements: %+v", tid, statements)
 
 	return s.conn.CypherBatch(queries)
 }
@@ -154,7 +144,7 @@ func (s service) Check() error {
 	return neoutils.Check(s.conn)
 }
 
-func (s service) Count() (int, error) {
+func (s service) Count(annotationLifecycle string, platformVersion string) (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}
@@ -164,7 +154,7 @@ func (s service) Count() (int, error) {
                 WHERE r.lifecycle = {lifecycle}
                 OR r.lifecycle IS NULL
                 RETURN count(r) as c`,
-		Parameters: neoism.Props{"platformVersion": s.platformVersion, "lifecycle": s.annotationLifecycle},
+		Parameters: neoism.Props{"platformVersion": platformVersion, "lifecycle": annotationLifecycle},
 		Result:     &results,
 	}
 
@@ -202,7 +192,7 @@ func getRelationshipFromPredicate(predicate string) (relation string) {
 	return relation
 }
 
-func createAnnotationQuery(contentUUID string, ann annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
+func createAnnotationQuery(contentUUID string, ann Annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
 	query := neoism.CypherQuery{}
 	thingID, err := extractUUIDFromURI(ann.Thing.ID)
 	if err != nil {
@@ -214,7 +204,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 		return nil, errors.New("Cannot insert a MENTIONS annotation with multiple provenances")
 	}*/
 
-	var prov provenance
+	var prov Provenance
 	params := map[string]interface{}{}
 	params["platformVersion"] = platformVersion
 	params["lifecycle"] = annotationLifecycle
@@ -252,7 +242,7 @@ func createAnnotationQuery(contentUUID string, ann annotation, platformVersion s
 	return &query, nil
 }
 
-func extractDataFromProvenance(prov *provenance) (string, int64, float64, float64, bool, error) {
+func extractDataFromProvenance(prov *Provenance) (string, int64, float64, float64, bool, error) {
 	if len(prov.Scores) == 0 {
 		return "", -1, -1, -1, false, nil
 	}
@@ -292,7 +282,7 @@ func convertAnnotatedDateToEpoch(annotatedDateString string) (int64, error) {
 	return datetimeEpoch.Unix(), nil
 }
 
-func extractScores(scores []score) (float64, float64, error) {
+func extractScores(scores []Score) (float64, float64, error) {
 	var relevanceScore, confidenceScore float64
 	for _, score := range scores {
 		scoringSystem := score.ScoringSystem
@@ -327,7 +317,7 @@ func buildDeleteQuery(contentUUID string, annotationLifecycle string, includeSta
 	return &query
 }
 
-func validateAnnotations(annotations *annotations) error {
+func validateAnnotations(annotations *Annotations) error {
 	//TODO - for consistency, we should probably just not create the annotation?
 	for _, annotation := range *annotations {
 		if annotation.Thing.ID == "" {
@@ -346,7 +336,7 @@ func (v ValidationError) Error() string {
 	return v.Msg
 }
 
-func mapToResponseFormat(ann *annotation) {
+func mapToResponseFormat(ann *Annotation) {
 	ann.Thing.ID = mapper.IDURL(ann.Thing.ID)
 	// We expect only ONE provenance - provenance value is considered valid even if the AgentRole is not specified. See: v1 - isClassifiedBy
 	for idx := range ann.Provenances {
