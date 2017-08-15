@@ -2,3 +2,4 @@ annotations-rw-neo4j*
 .idea
 .vscode
 vendor/*/
+/.project
