@@ -171,7 +171,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 	db, err := neoutils.Connect(neoURL, conf)
 
 	if err != nil {
-		logger.FatalEvent("Error connecting to neo4j %s", err)
+		logger.Fatalf(nil, err, "Error connecting to Neo4j")
 	}
 
 	return annotations.NewCypherAnnotationsService(db)
@@ -180,7 +180,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
 	producer, err := kafka.NewProducer(brokerAddress, producerTopic)
 	if err != nil {
-		logger.FatalEvent("Cannot start queue producer.", nil)
+		logger.Fatalf(nil, err, "Cannot start queue producer")
 	}
 	return producer
 }
@@ -188,7 +188,7 @@ func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Prod
 func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
 	consumer, err := kafka.NewConsumer(zookeeperAddress, consumerGroup, []string{topic}, kafka.DefaultConsumerConfig())
 	if err != nil {
-		logger.FatalEvent("Cannot start queue consumer", nil)
+		logger.Fatalf(nil, err, "Cannot start queue consumer")
 	}
 	return consumer
 }
@@ -197,7 +197,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 
 	file, e := ioutil.ReadFile(jsonPath)
 	if e != nil {
-		logger.FatalEvent("Error reading config file", e)
+		logger.Fatalf(nil, e, "Error reading configuration file")
 	}
 
 	type config struct {
@@ -208,11 +208,12 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	var c config
 	e = json.Unmarshal(file, &c)
 	if e != nil {
-		logger.FatalEvent("Error marshalling config file", e)
+		logger.Fatalf(nil, e, "Error marshalling config file")
+		
 	}
 
 	if c.MessageType == "" {
-		logger.FatalEvent("Message type is not configured.", nil)
+		logger.Fatalf(nil, fmt.Errorf("Empty message type"), "Message type is not configured")
 	}
 
 	return c.OriginMap, c.LifecycleMap, c.MessageType
@@ -244,7 +245,7 @@ func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 
 func startServer(port int) {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-		logger.FatalEvent("Unable to start server: %v", err)
+		logger.Fatalf(nil, err, "Unable to start server")
 	}
 }
 

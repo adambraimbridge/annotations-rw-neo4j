@@ -176,11 +176,11 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, msg, http.StatusBadRequest)
 			return
 		}
+		logger.NewMonitoringEntry("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).WithError(err).Error(msg)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
-
-	logger.MonitoringEventWithUUID("SaveNeo4j", tid, uuid, hh.messageType, fmt.Sprintf("%s successfully written in Neo4j", hh.messageType))
+	logger.NewMonitoringEntry("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Info("%s successfully written in Neo4j", hh.messageType)
 
 	if hh.producer != nil {
 		var originSystem string
@@ -198,7 +198,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		err = hh.forwardMessage(uuid, anns, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
-			logger.ErrorEventWithUUID(tid, uuid, msg, err)
+			logger.NewEntry(tid).WithUUID(uuid).WithError(err).Error(msg)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(jsonMessage(msg)))
 			return
@@ -223,7 +223,7 @@ func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations,
 		return err
 	}
 
-	logger.InfoEventWithUUID(tid, uuid, "Forwarding message to the next queue")
+	logger.NewEntry(tid).WithUUID(uuid).Info("Forwarding message to the next queue")
 	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 

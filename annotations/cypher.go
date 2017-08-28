@@ -73,7 +73,7 @@ func (s service) Read(contentUUID string, annotationLifecycle string) (thing int
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
-		logger.Errorf(map[string]interface{}{"uuid": contentUUID, "statement": query.Statement}, "Error looking up query with neoism %v", err)
+		logger.NewEntry("").WithUUID(contentUUID).WithError(err).Error("Error looking up query %s with neoism", query.Statement)
 		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
 	logger.Debugf(map[string]interface{}{"uuid": contentUUID, "queryResults": results}, "CypherResult Read Annotations for uuid")
@@ -114,12 +114,12 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		return fmt.Errorf("%s Content uuid is required", tid)
 	}
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
-		logger.ErrorEventWithUUID(tid, contentUUID, "Validation of supplied annotations failed", err)
+		logger.NewEntry(tid).WithUUID(contentUUID).WithError(err).Error("Validation of supplied annotations failed")
 		return err
 	}
 
 	if len(annotationsToWrite) == 0 {
-		logger.WarnEventWithUUID(tid, contentUUID, "No new annotations supplied for content", nil)
+		logger.NewEntry(tid).WithUUID(contentUUID).Warn("No new annotations supplied for content")
 	}
 
 	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
@@ -128,7 +128,7 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
-			logger.ErrorEventWithUUID(tid, contentUUID, err.Error(), err)
+			logger.NewEntry(tid).WithUUID(contentUUID).Error(err)
 			return err
 		}
 		statements = append(statements, query.Statement)
