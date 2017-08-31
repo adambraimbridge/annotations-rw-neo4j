@@ -7,19 +7,20 @@ import (
 	"os"
 
 	"encoding/json"
+	"io/ioutil"
+	"os/signal"
+	"syscall"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
-	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
-	"io/ioutil"
-	"os/signal"
-	"syscall"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -176,7 +177,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 }
 
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
-	producer, err := kafka.NewProducer(brokerAddress, producerTopic)
+	producer, err := kafka.NewProducer(brokerAddress, producerTopic, kafka.DefaultProducerConfig())
 	if err != nil {
 		log.Fatal("Cannot start queue producer.")
 	}
