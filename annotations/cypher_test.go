@@ -20,11 +20,13 @@ const (
 	brandUUID                 = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
 	v2PlatformVersion         = "v2"
 	v1PlatformVersion         = "v1"
+	pacPlatformVersion        = "pac"
 	nextVideoPlatformVersion  = "next-video"
 	brightcovePlatformVersion = "brightcove"
 	contentLifecycle          = "content"
 	v2AnnotationLifecycle     = "annotations-v2"
 	v1AnnotationLifecycle     = "annotations-v1"
+	pacAnnotationLifecycle    = "annotations-pac"
 	tid                       = "transaction_id"
 )
 
@@ -459,7 +461,7 @@ func TestCreateAnnotationQueryWithHasContributorPredicate(t *testing.T) {
 	assert := assert.New(t)
 	annotationToWrite := conceptWithHasContributorPredicate
 
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "HAS_CONTRIBUTOR", "\nRelationship name is not inserted!")
 	assert.NotContains(query.Statement, "MENTIONS", "\nDefault relationship was inserted instead of HAS_CONTRIBUTOR!")
@@ -469,7 +471,7 @@ func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
 	assert := assert.New(t)
 	annotationToWrite := conceptWithHasDispayTagPredicate
 
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "HAS_DISPLAY_TAG", "\nRelationship name is not inserted!")
 	assert.NotContains(query.Statement, "MENTIONS", "\nDefault relationship was inserted instead of HAS_DISPLAY_TAG!")
