@@ -18,22 +18,23 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Make go get work
-          command: sudo chown -R circleci:circleci /go/src
+          name: External Dependencies
+          command: |
+            go get github.com/mattn/goveralls
+            go get -u github.com/jstemmer/go-junit-report
+            go get -u github.com/kardianos/govendor
       - run:
           name: Create test folder
           command: mkdir -p $CIRCLE_TEST_REPORTS
-      - run: |
-          go get -u github.com/kardianos/govendor
-      - run: |
-          govendor sync
-      - run: |
-          go build -v
+      - run:
+          name: Govendor Sync
+          command: govendor sync -v
+      - run:
+          name: Go Build
+          command: go build -v
       - run:
           wget --retry-connrefused --no-check-certificate -T 60 $NEO4J_TEST_URL; curl $NEO4J_TEST_URL
-      - run: |
-          go get -u github.com/jstemmer/go-junit-report
-          go get -u github.com/mattn/goveralls
+      - run:
           wget https://raw.githubusercontent.com/Financial-Times/cookiecutter-upp-golang/master/coverage.sh && chmod +x coverage.sh
       - run: |
           mkdir -p $CIRCLE_TEST_REPORTS/golang
