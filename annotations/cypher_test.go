@@ -455,7 +455,6 @@ func TestCreateAnnotationQueryWithHasAuthorPredicate(t *testing.T) {
 	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_AUTHOR!"))
 }
 
-
 func TestCreateAnnotationQueryWithHasContributorPredicate(t *testing.T) {
 	assert := assert.New(t)
 	annotationToWrite := conceptWithHasContributorPredicate
@@ -463,10 +462,8 @@ func TestCreateAnnotationQueryWithHasContributorPredicate(t *testing.T) {
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "HAS_CONTRIBUTOR", fmt.Sprintf("\nRelationship name is not inserted!"))
-	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_AUTHOR!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_CONTRIBUTOR!"))
 }
-
-
 
 func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
 	assert := assert.New(t)
@@ -475,9 +472,8 @@ func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "HAS_DISPLAY_TAG", fmt.Sprintf("\nRelationship name is not inserted!"))
-	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_AUTHOR!"))
+	assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("\nDefault relationship was inserted instead of HAS_DISPLAY_TAG!"))
 }
-
 
 func getAnnotationsService(t *testing.T) service {
 	assert := assert.New(t)

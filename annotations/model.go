@@ -42,6 +42,6 @@ var relations = map[string]string{
 	"isPrimarilyClassifiedBy": "IS_PRIMARILY_CLASSIFIED_BY",
 	"majorMentions":           "MAJOR_MENTIONS",
 	"hasAuthor":               "HAS_AUTHOR",
-	"hasContributor":		   "HAS_CONTRIBUTOR",
-	"hasDisplayTag":		   "HAS_DISPLAY_TAG",
+	"hasContributor":          "HAS_CONTRIBUTOR",
+	"hasDisplayTag":           "HAS_DISPLAY_TAG",
 }
