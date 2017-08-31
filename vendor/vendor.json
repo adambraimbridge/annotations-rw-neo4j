@@ -3,18 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"path": "appengine",
-			"revision": ""
-		},
-		{
-			"path": "appengine/aetest",
-			"revision": ""
-		},
-		{
-			"path": "appengine/urlfetch",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "FfEWrE4sbtmtyeBTHCCF1q3QBxU=",
 			"path": "github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp",
 			"revision": "be466360f44ea91249e878204fc2f36f2fa9cf6c",
@@ -279,7 +267,7 @@
 			"revisionTime": "2016-09-14T00:11:54Z"
 		},
 		{
-			"checksumSHA1": "0pTcHZ43GApI5Lp33cN9RoWzdNk=",
+			"checksumSHA1": "93IzjQY+0dhZtOKGZbdyS50tsKw=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb",
 			"revisionTime": "2017-08-29T14:47:16Z"
