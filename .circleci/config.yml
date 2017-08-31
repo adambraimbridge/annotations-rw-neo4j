@@ -9,7 +9,7 @@ jobs:
           NEO4J_HEAP_MEMORY: 256
           NEO4J_CACHE_MEMORY: 256M
 
-    working_directory: /go/src/github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}
+    working_directory: /go/src/github.com/Financial-Times/annotations-rw-neo4j
     environment:
           NEO4J_TEST_URL: "http://localhost:7474/db/data/"
           CIRCLE_TEST_REPORTS: /tmp/test-reports
@@ -51,7 +51,7 @@ jobs:
           destination: build
 
   docker_build:
-    working_directory: /${CIRCLE_PROJECT_REPONAME}
+    working_directory: /annotations-rw-neo4j
     docker:
       - image: docker:1.12.6-git
     steps:
