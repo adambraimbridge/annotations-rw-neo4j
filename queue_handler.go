@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/transactionid-utils-go"
-	log "github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type queueHandler struct {

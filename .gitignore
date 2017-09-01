@@ -1,5 +1,5 @@
-.idea
 /annotations-rw-neo4j*
 .idea
 .vscode
+/.project
 vendor/*/

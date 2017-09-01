@@ -6,15 +6,16 @@ import (
 	"net/http"
 	"strings"
 
+	"io"
+	"time"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/transactionid-utils-go"
-	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/twinj/uuid"
-	"io"
-	"time"
 )
 
 const (

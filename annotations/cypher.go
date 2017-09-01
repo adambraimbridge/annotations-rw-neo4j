@@ -1,14 +1,15 @@
 package annotations
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/Financial-Times/neo-model-utils-go/mapper"
-	"github.com/Financial-Times/neo-utils-go/neoutils"
-	log "github.com/Sirupsen/logrus"
-	"github.com/jmcvetta/neoism"
 	"regexp"
 	"time"
-	"encoding/json"
+
+	"github.com/Financial-Times/neo-model-utils-go/mapper"
+	"github.com/Financial-Times/neo-utils-go/neoutils"
+	"github.com/jmcvetta/neoism"
+	log "github.com/sirupsen/logrus"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
