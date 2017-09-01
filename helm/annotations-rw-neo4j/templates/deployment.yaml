@@ -54,7 +54,7 @@ spec:
           valueFrom:
             configMapKeyRef:
               name: global-config
-              key: kafka.proxy.url
+              key: kafka.url
         - name: LIFECYCLE_CONFIG_PATH
           value: {{ .Values.env.LIFECYCLE_CONFIG_PATH }}
         - name: GRAPHITE_ADDRESS
