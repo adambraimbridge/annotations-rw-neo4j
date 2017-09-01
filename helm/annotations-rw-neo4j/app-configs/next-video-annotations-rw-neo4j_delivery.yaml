@@ -1,8 +1,0 @@
-# Values used for the deployed application.
-replicaCount: 2
-service:
-  name: next-video-annotations-rw-neo4j
-env:
-  ANNOTATION_LIFECYCLE: annotations-next-video
-  PLATFORM_VERSION: next-video
-  GRAPHITE_PREFIX: coco.services.k8s.next-video-annotations-rw-neo4j

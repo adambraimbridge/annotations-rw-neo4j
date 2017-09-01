@@ -29,25 +29,43 @@ spec:
           valueFrom: 
             configMapKeyRef: 
               name: global-config 
-              key: neo4j.read.write.url 
+              key: neo4j.read.write.url
         - name: BATCH_SIZE 
           valueFrom: 
             configMapKeyRef: 
               name: global-config 
-              key: neo4j.statements.batch.size 
-        - name: GRAPHITE_ADDRESS 
-          valueFrom: 
-            configMapKeyRef: 
-              name: global-config 
-              key: graphite.address
-        - name: LOG_METRICS 
-          value: "false"
-        - name: ANNOTATION_LIFECYCLE 
-          value: {{ .Values.env.ANNOTATION_LIFECYCLE}}
-        - name: PLATFORM_VERSION 
-          value: {{ .Values.env.PLATFORM_VERSION}}
-        - name: GRAPHITE_PREFIX 
-          value: {{ .Values.env.GRAPHITE_PREFIX}}
+              key: neo4j.statements.batch.size
+        - name: ZOOKEEPER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: global-config
+              value: zookeeper.url
+        - name: SHOULD_CONSUME_MESSAGES
+          value: "{{ .Values.env.SHOULD_CONSUME_MESSAGES }}"
+        - name: SHOULD_FORWARD_MESSAGES
+          value: "{{ .Values.env.SHOULD_FORWARD_MESSAGES }}"
+        - name: CONSUMER_GROUP
+          value: {{ .Values.env.CONSUMER_GROUP }}
+        - name: CONSUMER_TOPIC
+          value: {{ .Values.env}.CONSUMER_TOPIC }}
+        - name: PRODUCER_TOPIC
+          value: {{ .Values.env.PRODUCER_TOPIC }}
+        - name: BROKER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: global-config
+              value: kafka.proxy.url
+        - name: LIFECYCLE_CONFIG_PATH
+          value: {{ .Values.env.LIFECYCLE_CONFIG_PATH }}
+        - name: GRAPHITE_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: global-config
+              value: graphite.address
+        - name: GRAPHITE_PREFIX
+          value: 'coco.services.{{required "The target_env value is required for this app. Use helm upgrade ... --set target_env=... when installing." .Values.target_env}}.{{ .Values.service.name }}'
+        - name: LOG_METRICS
+          value: "{{ .Values.env.LOG_METRICS }}"
         ports: 
         - containerPort: 8080 
         livenessProbe: 
