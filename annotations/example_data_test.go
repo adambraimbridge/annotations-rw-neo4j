@@ -124,7 +124,7 @@ var (
 		},
 	}
 
-	conceptWithHasDispayTagPredicate = Annotation{
+	conceptWithHasDisplayTagPredicate = Annotation{
 		Thing: Thing{ID: getURI(oldConceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{

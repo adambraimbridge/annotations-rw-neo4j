@@ -469,7 +469,7 @@ func TestCreateAnnotationQueryWithHasContributorPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
 	assert := assert.New(t)
-	annotationToWrite := conceptWithHasDispayTagPredicate
+	annotationToWrite := conceptWithHasDisplayTagPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
