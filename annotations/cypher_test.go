@@ -101,6 +101,8 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 	}
 
 	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{testSetupQuery})
+	assert.NoError(err)
+
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
 	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToWrite), "Failed to write annotation")
@@ -269,6 +271,12 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID, secondConceptUUID})
 }
 
+func TestWriteFailsForInvalidPredicate(t *testing.T) {
+	annotationsDriver = getAnnotationsService(t)
+	err := annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, Annotations{conceptWithInvalidPredicate})
+	assert.EqualError(t, err, "Unsupported predicate")
+}
+
 func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert := assert.New(t)
 	annotationsDriver = getAnnotationsService(t)
@@ -353,7 +361,7 @@ func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 	assert.NoError(err, "Failed to delete annotation.")
 
 	result := []struct {
-		platformVersion string `json:"r.platformVersion"`
+		PlatformVersion string `json:"r.platformVersion"`
 	}{}
 
 	getContentQuery := &neoism.CypherQuery{
@@ -420,7 +428,9 @@ func TestGetRelationshipFromPredicate(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actualRelationship := getRelationshipFromPredicate(test.predicate)
+		actualRelationship, err := getRelationshipFromPredicate(test.predicate)
+		assert.NoError(t, err)
+
 		if test.relationship != actualRelationship {
 			t.Errorf("\nExpected: %s\nActual: %s", test.relationship, actualRelationship)
 		}

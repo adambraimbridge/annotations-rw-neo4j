@@ -177,6 +177,11 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, tid, anns)
+	if err == annotations.UnsupportedPredicateErr {
+		writeJSONError(w, "Please provide a valid predicate, or leave blank for the default predicate (MENTIONS)", http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {

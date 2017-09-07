@@ -7,14 +7,15 @@ import (
 	"net/http"
 	"testing"
 
+	"io/ioutil"
+	"net/http/httptest"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
-	"io/ioutil"
-	"net/http/httptest"
 )
 
 const (
@@ -110,6 +111,16 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
 	rec := httptest.NewRecorder()
 	router(&httpHandler, &suite.healthCheckHandler).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
+}
+
+func (suite *HttpHandlerTestSuite) TestPutHandler_InvalidPredicate() {
+	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(annotations.UnsupportedPredicateErr)
+	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
+	request.Header.Add("X-Request-Id", "tid_sample")
+	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}
+	rec := httptest.NewRecorder()
+	router(&httpHandler, &suite.healthCheckHandler).ServeHTTP(rec, request)
+	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusBadRequest))
 }
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {

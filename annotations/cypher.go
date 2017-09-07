@@ -2,16 +2,20 @@ package annotations
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
+	"time"
+
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
 	log "github.com/sirupsen/logrus"
-	"regexp"
-	"time"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+
+var UnsupportedPredicateErr = errors.New("Unsupported predicate")
 
 // Service interface. Compatible with the baserwftapp service EXCEPT for
 // 1) the Write function, which has signature Write(thing interface{}) error...
@@ -107,12 +111,13 @@ func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, e
 
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
-func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error) {
+func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) error {
 	annotationsToWrite := thing.(Annotations)
 
 	if contentUUID == "" {
 		return fmt.Errorf("%s Content uuid is required", tid)
 	}
+
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
 		log.Warnf("%s Validation of supplied annotations failed", tid)
 		return err
@@ -133,10 +138,15 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
-	log.Infof("%s Updated Annotations for content uuid: %s", tid, contentUUID)
-	log.Debugf("%s For update, ran statements: %+v", tid, statements)
 
-	return s.conn.CypherBatch(queries)
+	log.Debugf("%s For update, running statements: %+v", tid, statements)
+	err := s.conn.CypherBatch(queries)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("%s Updated Annotations for content uuid: %s", tid, contentUUID)
+	return nil
 }
 
 // Check tests neo4j by running a simple cypher query
@@ -183,13 +193,16 @@ func createAnnotationRelationship(relation string) (statement string) {
 	return statement
 }
 
-func getRelationshipFromPredicate(predicate string) (relation string) {
-	if predicate != "" {
-		relation = relations[predicate]
-	} else {
-		relation = relations["mentions"]
+func getRelationshipFromPredicate(predicate string) (string, error) {
+	if predicate == "" {
+		return relations["mentions"], nil
 	}
-	return relation
+
+	r, ok := relations[predicate]
+	if !ok {
+		return "", UnsupportedPredicateErr
+	}
+	return r, nil
 }
 
 func createAnnotationQuery(contentUUID string, ann Annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
@@ -231,7 +244,11 @@ func createAnnotationQuery(contentUUID string, ann Annotation, platformVersion s
 		}
 	}
 
-	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
+	relation, err := getRelationshipFromPredicate(ann.Thing.Predicate)
+	if err != nil {
+		return nil, err
+	}
+
 	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
 		"contentID":           contentUUID,
