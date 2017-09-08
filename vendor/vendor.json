@@ -3,18 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"path": "appengine",
-			"revision": ""
-		},
-		{
-			"path": "appengine/aetest",
-			"revision": ""
-		},
-		{
-			"path": "appengine/urlfetch",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "FfEWrE4sbtmtyeBTHCCF1q3QBxU=",
 			"path": "github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp",
 			"revision": "be466360f44ea91249e878204fc2f36f2fa9cf6c",
