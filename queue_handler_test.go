@@ -26,7 +26,7 @@ type QueueHandlerTestSuite struct {
 
 func (suite *QueueHandlerTestSuite) SetupTest() {
 	var err error
-	logger.InitDefaultLogger("annotatations-rw")
+	logger.InitDefaultLogger("annotations-rw")
 	suite.tid = "tid_sample"
 	suite.headers = createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")

@@ -40,7 +40,7 @@ type HttpHandlerTestSuite struct {
 }
 
 func (suite *HttpHandlerTestSuite) SetupTest() {
-	logger.InitDefaultLogger("annotatations-rw")
+	logger.InitDefaultLogger("annotations-rw")
 	var err error
 	suite.body, err = ioutil.ReadFile("annotations/examplePutBody.json")
 	assert.NoError(suite.T(), err, "Unexpected error")
