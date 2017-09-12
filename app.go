@@ -7,6 +7,10 @@ import (
 	"os"
 
 	"encoding/json"
+	"io/ioutil"
+	"os/signal"
+	"syscall"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-logger"
@@ -17,9 +21,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
-	"io/ioutil"
-	"os/signal"
-	"syscall"
 )
 
 func main() {
@@ -178,7 +179,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 }
 
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
-	producer, err := kafka.NewProducer(brokerAddress, producerTopic)
+	producer, err := kafka.NewProducer(brokerAddress, producerTopic, kafka.DefaultProducerConfig())
 	if err != nil {
 		logger.Fatalf(nil, err, "Cannot start queue producer")
 	}
@@ -209,7 +210,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	e = json.Unmarshal(file, &c)
 	if e != nil {
 		logger.Fatalf(nil, e, "Error marshalling config file")
-		
+
 	}
 
 	if c.MessageType == "" {

@@ -3,28 +3,29 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-type HealthCheckHandletTestSuite struct {
+type HealthCheckHandlerTestSuite struct {
 	suite.Suite
 	annotationsService *mockAnnotationsService
 	httpHandler        httpHandler
 }
 
-func (suite *HealthCheckHandletTestSuite) SetupTest() {
+func (suite *HealthCheckHandlerTestSuite) SetupTest() {
 	suite.annotationsService = new(mockAnnotationsService)
 	suite.httpHandler = httpHandler{}
 }
-func TestHealthCheckHandletTestSuite(t *testing.T) {
-	suite.Run(t, new(HealthCheckHandletTestSuite))
+func TestHealthCheckHandlerTestSuite(t *testing.T) {
+	suite.Run(t, new(HealthCheckHandlerTestSuite))
 }
 
-func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Success() {
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_Health_Success() {
 	suite.annotationsService.On("Check").Return(nil)
 	req, err := http.NewRequest(http.MethodGet, "/__health", nil)
 	assert.NoError(suite.T(), err, "Unexpected error")
@@ -34,7 +35,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Success(
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 }
 
-func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_AnnotationsServiceNotHealthy() {
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_Health_AnnotationsServiceNotHealthy() {
 	suite.annotationsService.On("Check").Return(errors.New("not healthy"))
 	req, err := http.NewRequest(http.MethodGet, "/__health", nil)
 	assert.NoError(suite.T(), err, "Unexpected error")
@@ -45,7 +46,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Annotati
 	assert.Contains(suite.T(), rec.Body.String(), `"ok":false`)
 }
 
-func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_ConsumerNotHealthy() {
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_Health_ConsumerNotHealthy() {
 	suite.annotationsService.On("Check").Return(nil)
 	req, err := http.NewRequest(http.MethodGet, "/__health", nil)
 	assert.NoError(suite.T(), err, "Unexpected error")
@@ -56,7 +57,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_Health_Consumer
 	assert.Contains(suite.T(), rec.Body.String(), `"ok":false`)
 }
 
-func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_Success() {
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_GTG_Success() {
 	suite.annotationsService.On("Check").Return(nil)
 	req, err := http.NewRequest(http.MethodGet, "/__gtg", nil)
 	assert.NoError(suite.T(), err, "Unexpected error")
@@ -66,7 +67,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_Success() {
 	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 }
 
-func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_AnnotationsServiceNotHealthy() {
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_GTG_AnnotationsServiceNotHealthy() {
 	suite.annotationsService.On("Check").Return(errors.New("not healthy"))
 	req, err := http.NewRequest(http.MethodGet, "/__gtg", nil)
 	assert.NoError(suite.T(), err, "Unexpected error")
@@ -77,7 +78,7 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_Annotations
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }
 
-func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_ConsumerNotHealthy() {
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_GTG_ConsumerNotHealthy() {
 	suite.annotationsService.On("Check").Return(nil)
 	req, err := http.NewRequest(http.MethodGet, "/__gtg", nil)
 	assert.NoError(suite.T(), err, "Unexpected error")
@@ -85,5 +86,14 @@ func (suite *HealthCheckHandletTestSuite) TestHealthCheckHandler_GTG_ConsumerNot
 	rec := httptest.NewRecorder()
 	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
+}
 
+func (suite *HealthCheckHandlerTestSuite) TestHealthCheckHandler_GTG_NilConsumer() {
+	suite.annotationsService.On("Check").Return(nil)
+	req, err := http.NewRequest(http.MethodGet, "/__gtg", nil)
+	assert.NoError(suite.T(), err, "Unexpected error")
+	healthCheckHandler := healthCheckHandler{annotationsService: suite.annotationsService, consumer: nil}
+	rec := httptest.NewRecorder()
+	router(&suite.httpHandler, &healthCheckHandler).ServeHTTP(rec, req)
+	assert.True(suite.T(), http.StatusOK == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusOK))
 }

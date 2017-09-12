@@ -3,6 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+
+	"io"
+	"time"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
@@ -10,10 +16,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/twinj/uuid"
-	"io"
-	"net/http"
-	"strings"
-	"time"
 )
 
 const (
@@ -170,6 +172,11 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, tid, anns)
+	if err == annotations.UnsupportedPredicateErr {
+		writeJSONError(w, "Please provide a valid predicate, or leave blank for the default predicate (MENTIONS)", http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {

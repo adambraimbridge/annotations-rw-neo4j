@@ -2,6 +2,7 @@ package annotations
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
@@ -12,6 +13,8 @@ import (
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+
+var UnsupportedPredicateErr = errors.New("Unsupported predicate")
 
 // Service interface. Compatible with the baserwftapp service EXCEPT for
 // 1) the Write function, which has signature Write(thing interface{}) error...
@@ -107,12 +110,13 @@ func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, e
 
 //Write a set of annotations associated with a piece of content. Any annotations
 //already there will be removed
-func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error) {
+func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) error {
 	annotationsToWrite := thing.(Annotations)
 
 	if contentUUID == "" {
 		return fmt.Errorf("%s Content uuid is required", tid)
 	}
+
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
 		logger.NewEntry(tid).WithUUID(contentUUID).WithError(err).Error("Validation of supplied annotations failed")
 		return err
@@ -135,7 +139,7 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		queries = append(queries, query)
 	}
 
-	logger.Debugf(map[string]interface{}{"transaction_id": tid, "statements": statements, "uuid": contentUUID}, "For update, ran statements")
+	logger.Debugf(map[string]interface{}{"transaction_id": tid, "statements": statements, "uuid": contentUUID}, "For update, running statements")
 	return s.conn.CypherBatch(queries)
 }
 
@@ -183,13 +187,16 @@ func createAnnotationRelationship(relation string) (statement string) {
 	return statement
 }
 
-func getRelationshipFromPredicate(predicate string) (relation string) {
-	if predicate != "" {
-		relation = relations[predicate]
-	} else {
-		relation = relations["mentions"]
+func getRelationshipFromPredicate(predicate string) (string, error) {
+	if predicate == "" {
+		return relations["mentions"], nil
 	}
-	return relation
+
+	r, ok := relations[predicate]
+	if !ok {
+		return "", UnsupportedPredicateErr
+	}
+	return r, nil
 }
 
 func createAnnotationQuery(contentUUID string, ann Annotation, platformVersion string, annotationLifecycle string) (*neoism.CypherQuery, error) {
@@ -230,7 +237,11 @@ func createAnnotationQuery(contentUUID string, ann Annotation, platformVersion s
 		}
 	}
 
-	relation := getRelationshipFromPredicate(ann.Thing.Predicate)
+	relation, err := getRelationshipFromPredicate(ann.Thing.Predicate)
+	if err != nil {
+		return nil, err
+	}
+
 	query.Statement = createAnnotationRelationship(relation)
 	query.Parameters = map[string]interface{}{
 		"contentID":           contentUUID,

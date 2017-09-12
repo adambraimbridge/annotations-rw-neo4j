@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
