@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
 	"github.com/stretchr/testify/assert"
@@ -36,6 +37,7 @@ func getURI(uuid string) string {
 
 func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	annotationsToDelete := exampleConcepts(conceptUUID)
 
@@ -63,7 +65,7 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 
 func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 	assert := assert.New(t)
-
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 
 	err := annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, conceptWithoutID)
@@ -74,6 +76,7 @@ func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 
 func TestWriteAllValuesPresent(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
@@ -86,6 +89,7 @@ func TestWriteAllValuesPresent(t *testing.T) {
 
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecycle(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	defer cleanDB(t, assert)
 
@@ -132,6 +136,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLifeCycle(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	defer cleanDB(t, assert)
 	contentQuery := &neoism.CypherQuery{
@@ -178,7 +183,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 
 func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *testing.T) {
 	assert := assert.New(t)
-
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver := getAnnotationsService(t)
 
 	createContentQuery := &neoism.CypherQuery{
@@ -264,6 +269,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 
 func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, multiConceptAnnotations), "Failed to write annotation")
 
@@ -279,6 +285,7 @@ func TestWriteFailsForInvalidPredicate(t *testing.T) {
 
 func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 
 	assert.NoError(annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, conceptWithoutAgent), "Failed to write annotation")
@@ -290,7 +297,7 @@ func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	defer cleanDB(t, assert)
-
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 
 	contentQuery := &neoism.CypherQuery{
@@ -339,7 +346,7 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	defer cleanDB(t, assert)
-
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 
 	contentQuery := &neoism.CypherQuery{
@@ -384,6 +391,7 @@ func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	oldAnnotationsToWrite := exampleConcepts(oldConceptUUID)
 
@@ -400,6 +408,7 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 
 func TestConnectivityCheck(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	err := annotationsDriver.Check()
 	assert.NoError(err, "Unexpected error on connectivity check")
@@ -407,6 +416,7 @@ func TestConnectivityCheck(t *testing.T) {
 
 func TestCreateAnnotationQuery(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationToWrite := exampleConcept(oldConceptUUID)
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2PlatformVersion, v2AnnotationLifecycle)
@@ -439,6 +449,7 @@ func TestGetRelationshipFromPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationToWrite := conceptWithPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
@@ -449,6 +460,7 @@ func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationToWrite := conceptWithAboutPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
@@ -459,6 +471,7 @@ func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
 
 func TestCreateAnnotationQueryWithHasAuthorPredicate(t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationToWrite := conceptWithHasAuthorPredicate
 
 	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
@@ -489,6 +502,7 @@ func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
 
 func getAnnotationsService(t *testing.T) service {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
 		url = "http://localhost:7474/db/data"
@@ -504,6 +518,7 @@ func getAnnotationsService(t *testing.T) service {
 
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, annotationLifecycle string, expectedAnnotations []Annotation) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	storedThings, found, err := annotationsDriver.Read(contentUUID, annotationLifecycle)
 	storedAnnotations := storedThings.(Annotations)
 
@@ -522,6 +537,7 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 
 func checkNodeIsStillPresent(uuid string, t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	results := []struct {
 		UUID string `json:"uuid"`
@@ -544,6 +560,7 @@ func checkNodeIsStillPresent(uuid string, t *testing.T) {
 
 func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
 	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
 	annotationsDriver = getAnnotationsService(t)
 	results := []struct {
 		UUID string `json:"uuid"`

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
@@ -88,11 +87,6 @@ func (hc healthCheckHandler) Checker() (string, error) {
 		return "Error connecting to neo4j", err
 	}
 	return "Connectivity to neo4j is ok", nil
-}
-
-// Ping says pong
-func Ping(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "pong")
 }
 
 func gtgCheck(handler func() (string, error)) gtg.Status {
