@@ -23,6 +23,7 @@ RUN apk --no-cache --virtual .build-dependencies add git \
   && $GOPATH/bin/govendor sync \
   && go get -v \
   && go build -ldflags="${LDFLAGS}" \
+  && go test \
   && mv ${PROJECT} /${PROJECT} \
   && mv annotation-config.json /annotation-config.json \
   && mv suggestion-config.json /suggestion-config.json \
