@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
-	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"net/http"
+
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/service-status-go/gtg"
-	"net/http"
+
+	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 )
 
 type healthCheckHandler struct {
@@ -29,11 +30,16 @@ func (h healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Request
 }
 
 func (h healthCheckHandler) GTG() gtg.Status {
-	consumerCheck := func() gtg.Status {
-		return gtgCheck(h.checkKafkaConnectivity)
-	}
 	writerCheck := func() gtg.Status {
 		return gtgCheck(h.Checker)
+	}
+
+	if h.consumer == nil {
+		return writerCheck()
+	}
+
+	consumerCheck := func() gtg.Status {
+		return gtgCheck(h.checkKafkaConnectivity)
 	}
 
 	return gtg.FailFastParallelCheck([]gtg.StatusChecker{
@@ -81,11 +87,6 @@ func (hc healthCheckHandler) Checker() (string, error) {
 		return "Error connecting to neo4j", err
 	}
 	return "Connectivity to neo4j is ok", nil
-}
-
-// Ping says pong
-func Ping(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "pong")
 }
 
 func gtgCheck(handler func() (string, error)) gtg.Status {

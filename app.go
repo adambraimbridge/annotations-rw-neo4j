@@ -13,6 +13,7 @@ import (
 
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
+	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
@@ -20,12 +21,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
-	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 
-	app := cli.App("annotations-rw-neo4j", "A RESTful API for managing Annotations in neo4j")
+	app := cli.App("annotations-rw", "A RESTful API for managing Annotations in neo4j")
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neoUrl",
 		Value:  "http://localhost:7474/db/data",
@@ -114,14 +114,16 @@ func main() {
 		Desc:   "Decides if annotations messages should be forwarded to a post publication queue",
 		EnvVar: "SHOULD_FORWARD_MESSAGES",
 	})
+	appName := app.String(cli.StringOpt{
+		Name:   "appName",
+		Value:  "annotations-rw",
+		Desc:   "Name of the service",
+		EnvVar: "APP_NAME",
+	})
 
 	app.Action = func() {
-		parsedLogLevel, err := log.ParseLevel(*logLevel)
-		if err != nil {
-			log.WithFields(log.Fields{"logLevel": logLevel, "err": err}).Fatal("Incorrect log level")
-		}
-		log.SetLevel(parsedLogLevel)
-		log.Infof("annotations-rw-neo4j will listen on port: %d, connecting to: %s", *port, *neoURL)
+		logger.InitLogger(*appName, *logLevel)
+		logger.Infof(map[string]interface{}{"port": *port, "neoURL": *neoURL}, "Service %s has successfully started.", *appName)
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
@@ -147,11 +149,12 @@ func main() {
 			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
 			qh.originMap = originMap
 			qh.lifecycleMap = lifecycleMap
+			qh.messageType = messageType
 			qh.Ingest()
 
 			go func() {
 				waitForSignal()
-				log.Info("Shutting down Kafka consumer")
+				logger.Infof(nil, "Shutting down Kafka consumer")
 				qh.consumer.Shutdown()
 			}()
 		}
@@ -160,7 +163,6 @@ func main() {
 		startServer(*port)
 
 	}
-	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
 }
 
@@ -170,7 +172,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 	db, err := neoutils.Connect(neoURL, conf)
 
 	if err != nil {
-		log.Fatalf("Error connecting to neo4j %s", err)
+		logger.Fatalf(nil, err, "Error connecting to Neo4j")
 	}
 
 	return annotations.NewCypherAnnotationsService(db)
@@ -179,7 +181,7 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
 	producer, err := kafka.NewProducer(brokerAddress, producerTopic, kafka.DefaultProducerConfig())
 	if err != nil {
-		log.Fatal("Cannot start queue producer.")
+		logger.Fatalf(nil, err, "Cannot start queue producer")
 	}
 	return producer
 }
@@ -187,7 +189,7 @@ func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Prod
 func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
 	consumer, err := kafka.NewConsumer(zookeeperAddress, consumerGroup, []string{topic}, kafka.DefaultConsumerConfig())
 	if err != nil {
-		log.Fatal("Cannot start queue consumer")
+		logger.Fatalf(nil, err, "Cannot start queue consumer")
 	}
 	return consumer
 }
@@ -196,7 +198,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 
 	file, e := ioutil.ReadFile(jsonPath)
 	if e != nil {
-		log.Fatal("Error reading config file", e)
+		logger.Fatalf(nil, e, "Error reading configuration file")
 	}
 
 	type config struct {
@@ -207,11 +209,12 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	var c config
 	e = json.Unmarshal(file, &c)
 	if e != nil {
-		log.Fatal("Error marshalling config file", e)
+		logger.Fatalf(nil, e, "Error marshalling config file")
+
 	}
 
 	if c.MessageType == "" {
-		log.Fatal("Message type is not configured.")
+		logger.Fatalf(nil, fmt.Errorf("Empty message type"), "Message type is not configured")
 	}
 
 	return c.OriginMap, c.LifecycleMap, c.MessageType
@@ -235,7 +238,7 @@ func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 	servicesRouter.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler).Methods("GET")
 
 	var monitoringRouter http.Handler = servicesRouter
-	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), monitoringRouter)
+	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(logger.NewLogger(), monitoringRouter)
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
 	return servicesRouter
@@ -243,7 +246,7 @@ func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 
 func startServer(port int) {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-		log.Fatalf("Unable to start server: %v", err)
+		logger.Fatalf(nil, err, "Unable to start server")
 	}
 }
 
