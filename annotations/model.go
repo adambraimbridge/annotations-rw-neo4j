@@ -38,6 +38,7 @@ const (
 var relations = map[string]string{
 	"mentions":                "MENTIONS",
 	"isClassifiedBy":          "IS_CLASSIFIED_BY",
+	"implicitlyClassifiedBy":  "IMPLICITLY_CLASSIFIED_BY",
 	"about":                   "ABOUT",
 	"isPrimarilyClassifiedBy": "IS_PRIMARILY_CLASSIFIED_BY",
 	"majorMentions":           "MAJOR_MENTIONS",
