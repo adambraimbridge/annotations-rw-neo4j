@@ -1,0 +1,4 @@
+apiVersion: v1
+description: annotations-rw-neo4j Helm chart for Kubernetes
+name: annotations-rw-neo4j
+version: 0.0.0

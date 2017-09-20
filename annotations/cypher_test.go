@@ -500,6 +500,16 @@ func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
 	assert.NotContains(query.Statement, "MENTIONS", "HAS_DISPLAY_TAG should be inserted instead of MENTIONS")
 }
 
+func TestCreateAnnotationQueryWithImplicitlyClassifiedByPredicate(t *testing.T) {
+	assert := assert.New(t)
+	annotationToWrite := conceptWithImplicitlyClassifiedByPredicate
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	assert.Contains(query.Statement, "IMPLICITLY_CLASSIFIED_BY", "Relationship name is not inserted!")
+	assert.NotContains(query.Statement, "MENTIONS", "IMPLICITLY_CLASSIFIED_BY should be inserted instead of MENTIONS")
+}
+
 func getAnnotationsService(t *testing.T) service {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
