@@ -187,7 +187,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
-	logger.NewMonitoringEntry("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Info("%s successfully written in Neo4j", hh.messageType)
+	logger.NewMonitoringEntry("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Infof("%s successfully written in Neo4j", hh.messageType)
 
 	if hh.producer != nil {
 		var originSystem string

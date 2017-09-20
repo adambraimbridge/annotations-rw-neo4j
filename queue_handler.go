@@ -55,7 +55,7 @@ func (qh *queueHandler) Ingest() {
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annMsg.UUID)
 		}
 
-		logger.NewMonitoringEntry("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Info("annotations successfully written in Neo4j")
+		logger.NewMonitoringEntry("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Infof("%s successfully written in Neo4j", qh.messageType)
 
 		//forward message to the next queue
 		if qh.producer != nil {
