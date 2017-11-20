@@ -15,10 +15,12 @@
 			"revisionTime": "2017-05-25T09:50:41Z"
 		},
 		{
-			"checksumSHA1": "R32X8CuDAJV1JimomUEh9SFmc8s=",
+			"checksumSHA1": "vEjWOjTbj1zDU4aNsl1u4J801Wg=",
 			"path": "github.com/Financial-Times/go-logger",
-			"revision": "83fc3e64dc5506fdb4e56b704949d157a121c76c",
-			"revisionTime": "2017-09-14T08:19:45Z"
+			"revision": "ec38b420999cfcbc86816afb47f365dad510450c",
+			"revisionTime": "2017-10-20T13:42:12Z",
+			"version": "=0.0.3",
+			"versionExact": "0.0.3"
 		},
 		{
 			"checksumSHA1": "dqF1g4reeLPNN10qTXgDJj3fHm4=",
@@ -283,7 +285,7 @@
 			"revisionTime": "2016-09-14T00:11:54Z"
 		},
 		{
-			"checksumSHA1": "0pTcHZ43GApI5Lp33cN9RoWzdNk=",
+			"checksumSHA1": "93IzjQY+0dhZtOKGZbdyS50tsKw=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb",
 			"revisionTime": "2017-08-29T14:47:16Z"

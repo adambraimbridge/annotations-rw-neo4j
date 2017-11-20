@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"time"
+
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
-	"regexp"
-	"time"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
@@ -76,10 +77,10 @@ func (s service) Read(contentUUID string, annotationLifecycle string) (thing int
 	}
 	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
 	if err != nil {
-		logger.NewEntry("").WithUUID(contentUUID).WithError(err).Error("Error looking up query %s with neoism", query.Statement)
+		logger.WithTransactionID("").WithUUID(contentUUID).WithError(err).Error("Error looking up query %s with neoism", query.Statement)
 		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
 	}
-	logger.Debugf(map[string]interface{}{"uuid": contentUUID, "queryResults": results}, "CypherResult Read Annotations for uuid")
+	logger.WithFields(map[string]interface{}{"uuid": contentUUID, "queryResults": results}).Debugf("CypherResult Read Annotations for uuid")
 	if (len(results)) == 0 {
 		return Annotations{}, false, nil
 	}
@@ -118,12 +119,12 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 	}
 
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
-		logger.NewEntry(tid).WithUUID(contentUUID).WithError(err).Error("Validation of supplied annotations failed")
+		logger.WithTransactionID(tid).WithUUID(contentUUID).WithError(err).Error("Validation of supplied annotations failed")
 		return err
 	}
 
 	if len(annotationsToWrite) == 0 {
-		logger.NewEntry(tid).WithUUID(contentUUID).Warn("No new annotations supplied for content")
+		logger.WithTransactionID(tid).WithUUID(contentUUID).Warn("No new annotations supplied for content")
 	}
 
 	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
@@ -132,14 +133,14 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
-			logger.NewEntry(tid).WithUUID(contentUUID).Error(err)
+			logger.WithTransactionID(tid).WithUUID(contentUUID).Error(err)
 			return err
 		}
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
 
-	logger.Debugf(map[string]interface{}{"transaction_id": tid, "statements": statements, "uuid": contentUUID}, "For update, running statements")
+	logger.WithFields(map[string]interface{}{"transaction_id": tid, "statements": statements, "uuid": contentUUID}).Debugf("For update, running statements")
 	return s.conn.CypherBatch(queries)
 }
 

@@ -64,7 +64,7 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	annotationJson, _ := json.Marshal(annotations)
-	logger.Debugf(nil, "Annotations for content (uuid:%s): %s\n", annotationJson)
+	logger.Debugf("Annotations for content (uuid:%s): %s\n", uuid, annotationJson)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(annotations)
@@ -183,11 +183,11 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, msg, http.StatusBadRequest)
 			return
 		}
-		logger.NewMonitoringEntry("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).WithError(err).Error(msg)
+		logger.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).WithError(err).Error(msg)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
-	logger.NewMonitoringEntry("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Infof("%s successfully written in Neo4j", hh.messageType)
+	logger.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Infof("%s successfully written in Neo4j", hh.messageType)
 
 	if hh.producer != nil {
 		var originSystem string
@@ -205,7 +205,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		err = hh.forwardMessage(uuid, anns, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
-			logger.NewEntry(tid).WithUUID(uuid).WithError(err).Error(msg)
+			logger.WithTransactionID(tid).WithUUID(uuid).WithError(err).Error(msg)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(jsonMessage(msg)))
 			return
@@ -230,7 +230,7 @@ func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations,
 		return err
 	}
 
-	logger.NewEntry(tid).WithUUID(uuid).Info("Forwarding message to the next queue")
+	logger.WithTransactionID(tid).WithUUID(uuid).Info("Forwarding message to the next queue")
 	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 
