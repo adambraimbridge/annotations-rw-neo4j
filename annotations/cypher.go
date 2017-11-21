@@ -24,8 +24,8 @@ var UnsupportedPredicateErr = errors.New("Unsupported predicate")
 // TODO - move to implement a shared defined Service interface?
 type Service interface {
 	Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) (err error)
-	Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error)
-	Delete(contentUUID string, annotationLifecycle string) (found bool, err error)
+	Read(contentUUID string, tid string, annotationLifecycle string) (thing interface{}, found bool, err error)
+	Delete(contentUUID string, tid string, annotationLifecycle string) (found bool, err error)
 	Check() (err error)
 	DecodeJSON(*json.Decoder) (thing interface{}, err error)
 	Count(annotationLifecycle string, platformVersion string) (int, error)
@@ -54,7 +54,7 @@ func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 	return a, err
 }
 
-func (s service) Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error) {
+func (s service) Read(contentUUID string, tid string, annotationLifecycle string) (thing interface{}, found bool, err error) {
 	results := []Annotation{}
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
@@ -75,12 +75,12 @@ func (s service) Read(contentUUID string, annotationLifecycle string) (thing int
 		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": annotationLifecycle},
 		Result:     &results,
 	}
-	err = s.conn.CypherBatch([]*neoism.CypherQuery{query})
-	if err != nil {
-		logger.WithTransactionID("").WithUUID(contentUUID).WithError(err).Error("Error looking up query %s with neoism", query.Statement)
-		return Annotations{}, false, fmt.Errorf("Error accessing Annotations datastore for uuid: %s", contentUUID)
+	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", results)
+	if err := s.conn.CypherBatch([]*neoism.CypherQuery{query}); err != nil {
+		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Errorf("Error executing delete queries in neo4j!")
+		return Annotations{}, false, err
 	}
-	logger.WithFields(map[string]interface{}{"uuid": contentUUID, "queryResults": results}).Debugf("CypherResult Read Annotations for uuid")
+	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", results)
 	if (len(results)) == 0 {
 		return Annotations{}, false, nil
 	}
@@ -95,14 +95,18 @@ func (s service) Read(contentUUID string, annotationLifecycle string) (thing int
 //Delete removes all the annotations for this content. Ignore the nodes on either end -
 //may leave nodes that are only 'things' inserted by this writer: clean up
 //as a result of this will need to happen externally if required
-func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, error) {
+func (s service) Delete(contentUUID string, tid string, annotationLifecycle string) (bool, error) {
 
 	query := buildDeleteQuery(contentUUID, annotationLifecycle, true)
+	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Sending delete queries to neo4j: %v", query)
 
-	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
+	if err := s.conn.CypherBatch([]*neoism.CypherQuery{query}); err != nil {
+		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error executing delete queries in neo4j!")
+	}
 
 	stats, err := query.Stats()
 	if err != nil {
+		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error running stats on delete queries")
 		return false, err
 	}
 
@@ -113,9 +117,10 @@ func (s service) Delete(contentUUID string, annotationLifecycle string) (bool, e
 //already there will be removed
 func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) error {
 	annotationsToWrite := thing.(Annotations)
-
 	if contentUUID == "" {
-		return fmt.Errorf("%s Content uuid is required", tid)
+		err := fmt.Errorf("Content uuid is required")
+		logger.WithTransactionID(tid).WithUUID(contentUUID).Error(err.Error())
+		return err
 	}
 
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
@@ -124,7 +129,7 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 	}
 
 	if len(annotationsToWrite) == 0 {
-		logger.WithTransactionID(tid).WithUUID(contentUUID).Warn("No new annotations supplied for content")
+		logger.WithTransactionID(tid).WithUUID(contentUUID).Info("No annotations supplied for content")
 	}
 
 	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
@@ -133,15 +138,18 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
-			logger.WithTransactionID(tid).WithUUID(contentUUID).Error(err)
+			logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Create annotation query failed")
 			return err
 		}
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
 
-	logger.WithFields(map[string]interface{}{"transaction_id": tid, "statements": statements, "uuid": contentUUID}).Debugf("For update, running statements")
-	return s.conn.CypherBatch(queries)
+	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Writing statements to neo4j: %v", statements)
+	if err := s.conn.CypherBatch(queries); err != nil {
+		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error executing write queries in neo4j!")
+	}
+	return nil
 }
 
 // Check tests neo4j by running a simple cypher query
@@ -166,6 +174,7 @@ func (s service) Count(annotationLifecycle string, platformVersion string) (int,
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	if err != nil {
+		logger.WithError(err).Error("Error executing count query in neo4j!")
 		return 0, err
 	}
 
@@ -310,7 +319,6 @@ func extractScores(scores []Score) (float64, float64, error) {
 
 func buildDeleteQuery(contentUUID string, annotationLifecycle string, includeStats bool) *neoism.CypherQuery {
 	var statement string
-
 	if annotationLifecycle == nextVideoAnnotationsLifecycle {
 		// TODO this clause should be deleted when all videos in Neo4j have annotations-next-video only as lifecycle and no brightcove reference
 		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
