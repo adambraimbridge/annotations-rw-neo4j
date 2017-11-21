@@ -51,15 +51,15 @@ func (qh *queueHandler) Ingest() {
 
 		err = qh.annotationsService.Write(annMsg.UUID, lifecycle, platformVersion, tid, annMsg.Annotations)
 		if err != nil {
-			logger.NewMonitoringEntry("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).WithError(err).Error("Cannot write to Neo4j")
+			logger.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).WithError(err).Error("Cannot write to Neo4j")
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annMsg.UUID)
 		}
 
-		logger.NewMonitoringEntry("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Infof("%s successfully written in Neo4j", qh.messageType)
+		logger.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Infof("%s successfully written in Neo4j", qh.messageType)
 
 		//forward message to the next queue
 		if qh.producer != nil {
-			logger.NewEntry(tid).WithUUID(annMsg.UUID).Info("Forwarding message to the next queue")
+			logger.WithTransactionID(tid).WithUUID(annMsg.UUID).Info("Forwarding message to the next queue")
 			return qh.producer.SendMessage(message)
 		}
 		return nil
