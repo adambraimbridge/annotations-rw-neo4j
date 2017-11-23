@@ -26,7 +26,7 @@ _NB You will need to tag a commit in order to build, since the UI asks for a tag
 * `$GOPATH/bin/annotations-rw-neo4j [--help]`
 
 You have more options here:
-- run neo4j and kafka locally (by docker, or natively)
+- run neo4j and kafka locally (by docker, or as native apps)
 - open a tunnel to one of your team clusters that your app can connect to
 - disable the functionality that requires kafka by setting the env var `SHOULD_FORWARD_MESSAGES=false`
 

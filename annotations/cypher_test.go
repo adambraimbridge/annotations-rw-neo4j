@@ -317,8 +317,7 @@ func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID})
 }
 
-// TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
-func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
+func TestNextVideoAnnotationsUpdatesAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	defer cleanDB(t, assert)
 	logger.InitDefaultLogger("annotations-rw")
@@ -333,15 +332,15 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 		Parameters: map[string]interface{}{
 			"contentUuid":     contentUUID,
 			"conceptUuid":     conceptUUID,
-			"platformVersion": brightcovePlatformVersion,
-			"lifecycle":       brightcoveAnnotationLifecycle,
+			"platformVersion": nextVideoAnnotationsLifecycle,
+			"lifecycle":       nextVideoAnnotationsLifecycle,
 		},
 	}
 
 	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
 	assert.NoError(err, "Error creating test data in database.")
 
-	assert.NoError(annotationsDriver.Write(contentUUID, nextVideoAnnotationsLifecycle, nextVideoPlatformVersion, tid, exampleConcepts(conceptUUID)), "Failed to write annotation.")
+	assert.NoError(annotationsDriver.Write(contentUUID, nextVideoAnnotationsLifecycle, nextVideoPlatformVersion, tid, exampleConcepts(secondConceptUUID)), "Failed to write annotation.")
 
 	result := []struct {
 		Lifecycle       string `json:"r.lifecycle"`
@@ -352,7 +351,7 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[r]->(b:Thing {uuid:{conceptUuid}}) RETURN r.lifecycle, r.platformVersion`,
 		Parameters: map[string]interface{}{
 			"contentUuid": contentUUID,
-			"conceptUuid": conceptUUID,
+			"conceptUuid": secondConceptUUID,
 		},
 		Result: &result,
 	}
@@ -366,53 +365,6 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 		assert.Equal(nextVideoPlatformVersion, result[0].PlatformVersion, "Platform version wrong.")
 		assert.Equal(nextVideoAnnotationsLifecycle, result[0].Lifecycle, "Lifecycle wrong.")
 	}
-}
-
-// TODO this test can be removed when the special handling for Brightcove videos with annotations-brightcove as lifecycle will be removed (see cypher.go)
-func TestNextVideoDeleteCleansAlsoBrightcoveAnnotations(t *testing.T) {
-	assert := assert.New(t)
-	defer cleanDB(t, assert)
-	logger.InitDefaultLogger("annotations-rw")
-	annotationsDriver = getAnnotationsService(t)
-
-	contentQuery := &neoism.CypherQuery{
-		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
-		 	    MERGE (a:Thing{uuid:{conceptUuid}})
-			    CREATE (n)-[rel:MENTIONS{platformVersion:{platformVersion}, lifecycle:{lifecycle}}]->(a)`,
-		Parameters: map[string]interface{}{
-			"contentUuid":     contentUUID,
-			"conceptUuid":     conceptUUID,
-			"platformVersion": brightcovePlatformVersion,
-			"lifecycle":       brightcoveAnnotationLifecycle,
-		},
-	}
-
-	err := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
-	assert.NoError(err, "Error creating test data in database.")
-
-	_, err = annotationsDriver.Delete(contentUUID, tid, nextVideoAnnotationsLifecycle)
-	assert.NoError(err, "Failed to delete annotation.")
-
-	result := []struct {
-		PlatformVersion string `json:"r.platformVersion"`
-	}{}
-
-	getContentQuery := &neoism.CypherQuery{
-		Statement: `MATCH (n:Thing {uuid:{contentUuid}})-[r]->(b:Thing {uuid:{conceptUuid}}) RETURN r.platformVersion`,
-		Parameters: map[string]interface{}{
-			"contentUuid": contentUUID,
-			"conceptUuid": conceptUUID,
-		},
-		Result: &result,
-	}
-
-	readErr := annotationsDriver.conn.CypherBatch([]*neoism.CypherQuery{getContentQuery})
-
-	assert.NoError(readErr)
-	assert.Empty(result, "Relationship not cleaned.")
-
-	deleteNode(annotationsDriver, contentUUID)
-	deleteNode(annotationsDriver, conceptUUID)
 }
 
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {

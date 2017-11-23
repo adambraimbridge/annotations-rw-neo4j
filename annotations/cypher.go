@@ -320,16 +320,8 @@ func extractScores(scores []Score) (float64, float64, error) {
 }
 
 func buildDeleteQuery(contentUUID string, annotationLifecycle string, includeStats bool) *neoism.CypherQuery {
-	var statement string
-	if annotationLifecycle == nextVideoAnnotationsLifecycle {
-		// TODO this clause should be deleted when all videos in Neo4j have annotations-next-video only as lifecycle and no brightcove reference
-		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r]->(t:Thing)
-					WHERE r.lifecycle={annotationLifecycle} OR r.lifecycle={brightcoveLifecycle}
+	statement := `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing)
 					DELETE r`
-	} else {
-		statement = `	OPTIONAL MATCH (:Thing{uuid:{contentID}})-[r{lifecycle:{annotationLifecycle}}]->(t:Thing)
-					DELETE r`
-	}
 
 	query := neoism.CypherQuery{
 		Statement:    statement,
