@@ -31,6 +31,10 @@ const (
 	tid                       = "transaction_id"
 )
 
+func init() {
+	// TODO add index constraints - here, or in the application - decide which is a better place for them to live
+}
+
 func getURI(uuid string) string {
 	return fmt.Sprintf("http://api.ft.com/things/%s", uuid)
 }
@@ -298,8 +302,10 @@ func TestNextVideoAnnotationsUpdateDeletesBrightcoveAnnotations(t *testing.T) {
 	annotationsDriver = getAnnotationsService(t)
 
 	contentQuery := &neoism.CypherQuery{
-		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
-		 	    MERGE (a:Thing{uuid:{conceptUuid}})
+		Statement: `CREATE (n:Thing {uuid:{contentUuid}})
+		 	    CREATE (a:Thing{uuid:{conceptUuid}})
+		 	    CREATE (upp:Identifier:UPPIdentifier{value:{conceptUuid}})
+                	    MERGE (upp)-[:IDENTIFIES]->(a)
 			    CREATE (n)-[rel:MENTIONS{platformVersion:{platformVersion}, lifecycle:{lifecycle}}]->(a)`,
 		Parameters: map[string]interface{}{
 			"contentUuid":     contentUUID,

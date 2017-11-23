@@ -53,7 +53,8 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	annotations, found, err := hh.annotationsService.Read(uuid, lifecycle)
+	tid := transactionidutils.GetTransactionIDFromRequest(r)
+	annotations, found, err := hh.annotationsService.Read(uuid, tid, lifecycle)
 	if err != nil {
 		msg := fmt.Sprintf("Error getting annotations (%v)", err)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
@@ -90,7 +91,8 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	found, err := hh.annotationsService.Delete(uuid, lifecycle)
+	tid := transactionidutils.GetTransactionIDFromRequest(r)
+	found, err := hh.annotationsService.Delete(uuid, tid, lifecycle)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return

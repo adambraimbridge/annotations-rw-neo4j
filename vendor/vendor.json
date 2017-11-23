@@ -19,7 +19,7 @@
 			"path": "github.com/Financial-Times/go-logger",
 			"revision": "ec38b420999cfcbc86816afb47f365dad510450c",
 			"revisionTime": "2017-10-20T13:42:12Z",
-			"version": "=0.0.3",
+			"version": "0.0.3",
 			"versionExact": "0.0.3"
 		},
 		{
