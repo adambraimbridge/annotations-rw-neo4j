@@ -182,7 +182,9 @@ func (s service) Count(annotationLifecycle string, platformVersion string) (int,
 }
 
 func (s service) Initialise() error {
-	return nil // No constraints need to be set up
+	return s.conn.EnsureConstraints(map[string]string{
+		"Thing": "uuid",
+	})
 }
 
 func createAnnotationRelationship(relation string) (statement string) {
