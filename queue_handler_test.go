@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
+	"io/ioutil"
+
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"io/ioutil"
 )
 
 type QueueHandlerTestSuite struct {

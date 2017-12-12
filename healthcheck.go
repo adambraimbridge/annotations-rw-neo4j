@@ -7,6 +7,8 @@ import (
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/service-status-go/gtg"
 
+	"time"
+
 	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
 )
 
@@ -20,11 +22,14 @@ func (h healthCheckHandler) Health() func(w http.ResponseWriter, r *http.Request
 	if h.consumer != nil {
 		checks = append(checks, h.readQueueCheck())
 	}
-	hc := fthealth.HealthCheck{
-		SystemCode:  "annotation-rw",
-		Name:        "annotation-rw",
-		Description: "Checks if all the dependent services are reachable and healthy.",
-		Checks:      checks,
+	hc := fthealth.TimedHealthCheck{
+		HealthCheck: fthealth.HealthCheck{
+			SystemCode:  "annotation-rw",
+			Name:        "annotation-rw",
+			Description: "Checks if all the dependent services are reachable and healthy.",
+			Checks:      checks,
+		},
+		Timeout: 10 * time.Second,
 	}
 	return fthealth.Handler(hc)
 }
@@ -82,8 +87,7 @@ func (h healthCheckHandler) checkKafkaConnectivity() (string, error) {
 // Checker does more stuff
 //TODO use the shared utility check
 func (hc healthCheckHandler) Checker() (string, error) {
-	err := hc.annotationsService.Check()
-	if err = hc.annotationsService.Check(); err != nil {
+	if err := hc.annotationsService.Check(); err != nil {
 		return "Error connecting to neo4j", err
 	}
 	return "Connectivity to neo4j is ok", nil
