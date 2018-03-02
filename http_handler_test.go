@@ -137,7 +137,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {
 }
 
 func (suite *HttpHandlerTestSuite) TestGetHandler_Success() {
-	suite.annotationsService.On("Read", knownUUID, annotationLifecycle).Return(suite.annotations, true, nil)
+	suite.annotationsService.On("Read", knownUUID, mock.Anything, annotationLifecycle).Return(suite.annotations, true, nil)
 	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	router(&httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}, &suite.healthCheckHandler).ServeHTTP(rec, request)
@@ -148,7 +148,7 @@ func (suite *HttpHandlerTestSuite) TestGetHandler_Success() {
 }
 
 func (suite *HttpHandlerTestSuite) TestGetHandler_NotFound() {
-	suite.annotationsService.On("Read", knownUUID, annotationLifecycle).Return(nil, false, nil)
+	suite.annotationsService.On("Read", knownUUID, mock.Anything, annotationLifecycle).Return(nil, false, nil)
 	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	router(&httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}, &suite.healthCheckHandler).ServeHTTP(rec, request)
@@ -156,7 +156,7 @@ func (suite *HttpHandlerTestSuite) TestGetHandler_NotFound() {
 }
 
 func (suite *HttpHandlerTestSuite) TestGetHandler_ReadError() {
-	suite.annotationsService.On("Read", knownUUID, annotationLifecycle).Return(nil, false, errors.New("Read error"))
+	suite.annotationsService.On("Read", knownUUID, mock.Anything, annotationLifecycle).Return(nil, false, errors.New("Read error"))
 	request := newRequest("GET", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	router(&httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}, &suite.healthCheckHandler).ServeHTTP(rec, request)
@@ -164,7 +164,7 @@ func (suite *HttpHandlerTestSuite) TestGetHandler_ReadError() {
 }
 
 func (suite *HttpHandlerTestSuite) TestDeleteHandler_Success() {
-	suite.annotationsService.On("Delete", knownUUID, annotationLifecycle).Return(true, nil)
+	suite.annotationsService.On("Delete", knownUUID, mock.Anything, annotationLifecycle).Return(true, nil)
 	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	router(&httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}, &suite.healthCheckHandler).ServeHTTP(rec, request)
@@ -172,7 +172,7 @@ func (suite *HttpHandlerTestSuite) TestDeleteHandler_Success() {
 }
 
 func (suite *HttpHandlerTestSuite) TestDeleteHandler_NotFound() {
-	suite.annotationsService.On("Delete", knownUUID, annotationLifecycle).Return(false, nil)
+	suite.annotationsService.On("Delete", knownUUID, mock.Anything, annotationLifecycle).Return(false, nil)
 	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	router(&httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}, &suite.healthCheckHandler).ServeHTTP(rec, request)
@@ -180,7 +180,7 @@ func (suite *HttpHandlerTestSuite) TestDeleteHandler_NotFound() {
 }
 
 func (suite *HttpHandlerTestSuite) TestDeleteHandler_DeleteError() {
-	suite.annotationsService.On("Delete", knownUUID, annotationLifecycle).Return(false, errors.New("Delete error"))
+	suite.annotationsService.On("Delete", knownUUID, mock.Anything, annotationLifecycle).Return(false, errors.New("Delete error"))
 	request := newRequest("DELETE", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", nil)
 	rec := httptest.NewRecorder()
 	router(&httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType}, &suite.healthCheckHandler).ServeHTTP(rec, request)
@@ -251,12 +251,12 @@ func (as *mockAnnotationsService) Write(contentUUID string, annotationLifecycle 
 	args := as.Called(contentUUID, annotationLifecycle, platformVersion, tid, thing)
 	return args.Error(0)
 }
-func (as *mockAnnotationsService) Read(contentUUID string, annotationLifecycle string) (thing interface{}, found bool, err error) {
-	args := as.Called(contentUUID, annotationLifecycle)
+func (as *mockAnnotationsService) Read(contentUUID string, tid string, annotationLifecycle string) (thing interface{}, found bool, err error) {
+	args := as.Called(contentUUID, tid, annotationLifecycle)
 	return args.Get(0), args.Bool(1), args.Error(2)
 }
-func (as *mockAnnotationsService) Delete(contentUUID string, annotationLifecycle string) (found bool, err error) {
-	args := as.Called(contentUUID, annotationLifecycle)
+func (as *mockAnnotationsService) Delete(contentUUID string, tid string, annotationLifecycle string) (found bool, err error) {
+	args := as.Called(contentUUID, tid, annotationLifecycle)
 	return args.Bool(0), args.Error(1)
 }
 func (as *mockAnnotationsService) Check() (err error) {

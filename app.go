@@ -176,7 +176,14 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 		logger.WithError(err).Fatal("Error connecting to Neo4j")
 	}
 
+	annotationsService := annotations.NewCypherAnnotationsService(db)
+	err = annotationsService.Initialise()
+	if err != nil {
+		logger.Errorf("annotations service has not been initalised correctly %s", err)
+	}
+
 	return annotations.NewCypherAnnotationsService(db)
+	return annotationsService
 }
 
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
