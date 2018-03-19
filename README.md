@@ -5,14 +5,6 @@ __A service and an API for reading/writing annotations into Neo4j.
 If the consumer is enabled: the messages are consumed from the queue, they get written into Neo4j, and finally, if the producer is also enabled, they got forwarded into the next (PostAnnotations) queue.
 The above flow can be initiated by the PUT endpoint as well. In this case, the service expects the annotations json to be supplied in the format that comes out of the annotations consumer.__
 
-## Build & deployment etc:
-*TODO*
-_NB You will need to tag a commit in order to build, since the UI asks for a tag to build / deploy_
-* [Jenkins view](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/)
-* [Build and publish to forge](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-build/)
-* [Deploy to Test](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-deploy-test/)
-* [Deploy to Prod](http://ftjen10085-lvpr-uk-p:8181/view/JOBS-annotations-rw-neo4j/job/annotations-rw-neo4j-deploy-prod/)
-
 ## Installation
 * `go get -u github.com/kardianos/govendor`
 * `go get -u github.com/Financial-Times/annotations-rw-neo4j`
