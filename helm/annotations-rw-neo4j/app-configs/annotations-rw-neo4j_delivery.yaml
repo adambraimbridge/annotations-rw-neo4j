@@ -9,4 +9,3 @@ env:
   CONSUMER_TOPIC: ConceptAnnotations
   PRODUCER_TOPIC: PostConceptAnnotations
   LIFECYCLE_CONFIG_PATH: annotation-config.json
-  LOG_METRICS: false

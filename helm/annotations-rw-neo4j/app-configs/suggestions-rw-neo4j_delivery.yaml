@@ -7,4 +7,3 @@ env:
   SHOULD_FORWARD_MESSAGES: true
   PRODUCER_TOPIC: PostConceptSuggestions
   LIFECYCLE_CONFIG_PATH: suggestion-config.json
-  LOG_METRICS: false
