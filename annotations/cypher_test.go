@@ -384,14 +384,6 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID, oldConceptUUID})
 }
 
-func TestConnectivityCheck(t *testing.T) {
-	assert := assert.New(t)
-	logger.InitDefaultLogger("annotations-rw")
-	annotationsDriver = getAnnotationsService(t)
-	err := annotationsDriver.Check()
-	assert.NoError(err, "Unexpected error on connectivity check")
-}
-
 func TestCreateAnnotationQuery(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")

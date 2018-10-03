@@ -226,6 +226,14 @@ func (mp *mockProducer) SendMessage(message kafka.FTMessage) error {
 	return args.Error(0)
 }
 
+func (mp *mockProducer) ConnectivityCheck() error {
+	return nil
+}
+
+func (mp *mockProducer) Shutdown() {
+	return
+}
+
 type mockConsumer struct {
 	message kafka.FTMessage
 	err     error
