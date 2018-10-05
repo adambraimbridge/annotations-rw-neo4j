@@ -25,6 +25,7 @@ FROM scratch
 WORKDIR /
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=0 /artifacts/* /
+COPY --from=0 /${SRC_FOLDER}/suggestion-config.json /
 
 WORKDIR /
 
