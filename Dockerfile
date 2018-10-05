@@ -22,6 +22,7 @@ RUN BUILDINFO_PACKAGE="${ORG_PATH}/${PROJECT}/vendor/${ORG_PATH}/service-status-
     && CGO_ENABLED=0 go build -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}"
 
 COPY ./suggestion-config.json /artifacts/suggestion-config.json
+COPY ./annotation-config.json /artifacts/annotation-config.json
 
 FROM scratch
 WORKDIR /
