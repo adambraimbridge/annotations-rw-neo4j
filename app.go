@@ -174,7 +174,14 @@ func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Prod
 }
 
 func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
-	consumer, err := kafka.NewConsumer(zookeeperAddress, consumerGroup, []string{topic}, kafka.DefaultConsumerConfig())
+
+	config := kafka.Config{
+		ZookeeperConnectionString: zookeeperAddress,
+		ConsumerGroup:             consumerGroup,
+		Topics:                    []string{topic},
+		ConsumerGroupConfig:       kafka.DefaultConsumerConfig()}
+
+	consumer, err := kafka.NewConsumer(config)
 	if err != nil {
 		logger.WithError(err).Fatal("Cannot start queue consumer")
 	}

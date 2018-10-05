@@ -134,7 +134,7 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 
 	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
 
-	var statements = []string{}
+	var statements []string
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
@@ -154,13 +154,18 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 
 // Check tests neo4j by running a simple cypher query
 func (s service) Check() error {
+	writableErr := neoutils.CheckWritable(s.conn)
+	if writableErr != nil {
+		return writableErr
+	}
+
 	return neoutils.Check(s.conn)
 }
 
 func (s service) Count(annotationLifecycle string, platformVersion string) (int, error) {
-	results := []struct {
+	var results []struct {
 		Count int `json:"c"`
-	}{}
+	}
 
 	query := &neoism.CypherQuery{
 		Statement: `MATCH ()-[r{platformVersion:{platformVersion}}]->()

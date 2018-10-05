@@ -1,36 +1,32 @@
-FROM golang:1.8-alpine
+FROM golang:1.11.1-alpine
 
 ENV PROJECT=annotations-rw-neo4j
-COPY . /${PROJECT}-sources/
+ENV ORG_PATH="github.com/Financial-Times"
+ENV SRC_FOLDER="${GOPATH}/src/${ORG_PATH}/${PROJECT}"
 
-RUN apk --no-cache --virtual .build-dependencies add git \
-  && ORG_PATH="github.com/Financial-Times" \
-  && REPO_PATH="${ORG_PATH}/${PROJECT}" \
-  && mkdir -p $GOPATH/src/${ORG_PATH} \
-  # Linking the project sources in the GOPATH folder
-  && ln -s /${PROJECT}-sources $GOPATH/src/${REPO_PATH} \
-  && cd $GOPATH/src/${REPO_PATH} \
-  && BUILDINFO_PACKAGE="${ORG_PATH}/${PROJECT}/vendor/${ORG_PATH}/service-status-go/buildinfo." \
-  && VERSION="version=$(git describe --tag --always 2> /dev/null)" \
-  && DATETIME="dateTime=$(date -u +%Y%m%d%H%M%S)" \
-  && REPOSITORY="repository=$(git config --get remote.origin.url)" \
-  && REVISION="revision=$(git rev-parse HEAD)" \
-  && BUILDER="builder=$(go version)" \
-  && LDFLAGS="-X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
-  && echo "Build flags: $LDFLAGS" \
-  && echo "Fetching dependencies..." \
-  && go get -u github.com/kardianos/govendor \
-  && $GOPATH/bin/govendor sync \
-  && go get -v \
-  && go build -ldflags="${LDFLAGS}" \
-  && go test \
-  && mv ${PROJECT} /${PROJECT} \
-  && mv annotation-config.json /annotation-config.json \
-  && mv suggestion-config.json /suggestion-config.json \
-  && rm -rf * \
-  && apk del .build-dependencies \
-  && rm -rf $GOPATH /var/cache/apk/*
+COPY . /${SRC_FOLDER}/
+WORKDIR ${SRC_FOLDER}
 
+RUN apk --no-cache add git curl
+RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+
+RUN $GOPATH/bin/dep ensure -vendor-only
+
+RUN BUILDINFO_PACKAGE="${ORG_PATH}/${PROJECT}/vendor/${ORG_PATH}/service-status-go/buildinfo." \
+    && VERSION="version=$(git describe --tag --always 2> /dev/null)" \
+    && DATETIME="dateTime=$(date -u +%Y%m%d%H%M%S)" \
+    && REPOSITORY="repository=$(git config --get remote.origin.url)" \
+    && REVISION="revision=$(git rev-parse HEAD)" \
+    && BUILDER="builder=$(go version)" \
+    && LDFLAGS="-s -w -X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
+    && CGO_ENABLED=0 go build -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}"
+
+COPY ./suggestion-config.json /artifacts/suggestion-config.json
+COPY ./annotation-config.json /artifacts/annotation-config.json
+
+FROM scratch
 WORKDIR /
+COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=0 /artifacts/* /
 
 CMD [ "/annotations-rw-neo4j" ]
