@@ -21,7 +21,7 @@ RUN BUILDINFO_PACKAGE="${ORG_PATH}/${PROJECT}/vendor/${ORG_PATH}/service-status-
     && LDFLAGS="-s -w -X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
     && CGO_ENABLED=0 go build -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}"
 
-COPY --from=0 /${SRC_FOLDER}/suggestion-config.json /artifacts/suggestion-config.json
+COPY ./suggestion-config.json /artifacts/suggestion-config.json
 
 FROM scratch
 WORKDIR /
