@@ -1,4 +1,4 @@
-FROM golang:1.11.1-alpine
+FROM golang:1.12-alpine
 
 ENV PROJECT=annotations-rw-neo4j
 ENV ORG_PATH="github.com/Financial-Times"
