@@ -218,6 +218,22 @@
   version = "v0.1.0"
 
 [[projects]]
+  digest = "1:3fe70b42801c8d32fa1fd6989c0ba270358b987926007fdad8e55b2595fc3051"
+  name = "github.com/neo4j-drivers/gobolt"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "0b8728e471cbd11fe5ffa3ae65a467886018012e"
+  version = "v1.7.4"
+
+[[projects]]
+  digest = "1:9955b0378d6b37aa52ea1844e03349e3654bf9ea30a09f10e8455b02be04f191"
+  name = "github.com/neo4j/neo4j-go-driver"
+  packages = ["neo4j"]
+  pruneopts = "UT"
+  revision = "934739616886b903306e1df80aa58047407a1971"
+  version = "v1.7.4"
+
+[[projects]]
   digest = "1:4f0885b3f0dba96128a09a6f4b4231c42688fbd05f323224c6aa5adc9f4e87bf"
   name = "github.com/pierrec/lz4"
   packages = [
@@ -373,6 +389,7 @@
     "github.com/jawher/mow.cli",
     "github.com/jmcvetta/neoism",
     "github.com/joho/godotenv/autoload",
+    "github.com/neo4j/neo4j-go-driver/neo4j",
     "github.com/pkg/errors",
     "github.com/rcrowley/go-metrics",
     "github.com/stretchr/testify/assert",

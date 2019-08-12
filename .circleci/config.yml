@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.11.1
+      - image: coco/go-alpine-plus-seabolt:v1.2.2-k8s-update-rc1
       - image: neo4j:3.4.10-enterprise
         environment:
           NEO4J_AUTH: none

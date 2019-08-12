@@ -88,3 +88,7 @@
 [prune]
   go-tests = true
   unused-packages = true
+
+[[constraint]]
+  name = "github.com/neo4j/neo4j-go-driver"
+  version = "1.7.4"

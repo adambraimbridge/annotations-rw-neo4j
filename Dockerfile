@@ -1,4 +1,4 @@
-FROM golang:1.11.1-alpine
+FROM coco/go-alpine-plus-seabolt:v1.2.2-k8s-update-rc1
 
 ENV PROJECT=annotations-rw-neo4j
 ENV ORG_PATH="github.com/Financial-Times"
@@ -7,7 +7,6 @@ ENV SRC_FOLDER="${GOPATH}/src/${ORG_PATH}/${PROJECT}"
 COPY . /${SRC_FOLDER}/
 WORKDIR ${SRC_FOLDER}
 
-RUN apk --no-cache add git curl
 RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
 RUN $GOPATH/bin/dep ensure -vendor-only
@@ -19,12 +18,12 @@ RUN BUILDINFO_PACKAGE="${ORG_PATH}/${PROJECT}/vendor/${ORG_PATH}/service-status-
     && REVISION="revision=$(git rev-parse HEAD)" \
     && BUILDER="builder=$(go version)" \
     && LDFLAGS="-s -w -X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
-    && CGO_ENABLED=0 go build -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}"
+    && CGO_ENABLED=1 go build -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}" -tags seabolt_static
 
 COPY ./suggestion-config.json /artifacts/suggestion-config.json
 COPY ./annotation-config.json /artifacts/annotation-config.json
 
-FROM scratch
+FROM alpine:3.10
 WORKDIR /
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=0 /artifacts/* /

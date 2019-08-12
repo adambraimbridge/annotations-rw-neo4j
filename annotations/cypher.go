@@ -11,6 +11,7 @@ import (
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
+	"github.com/neo4j/neo4j-go-driver/neo4j"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
@@ -34,7 +35,8 @@ type Service interface {
 
 //holds the Neo4j-specific information
 type service struct {
-	conn neoutils.NeoConnection
+	conn   neoutils.NeoConnection
+	driver neo4j.Driver
 }
 
 const (
@@ -44,7 +46,7 @@ const (
 
 //NewCypherAnnotationsService instantiate driver
 func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection) service {
-	return service{cypherRunner}
+	return service{cypherRunner, nil}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
