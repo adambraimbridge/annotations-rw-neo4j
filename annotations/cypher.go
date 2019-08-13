@@ -31,12 +31,13 @@ type Service interface {
 	DecodeJSON(*json.Decoder) (thing interface{}, err error)
 	Count(annotationLifecycle string, platformVersion string) (int, error)
 	Initialise() error
+	Close() error
 }
 
 //holds the Neo4j-specific information
 type service struct {
-	conn   neoutils.NeoConnection
-	driver neo4j.Driver
+	conn      neoutils.NeoConnection
+	neoDriver neo4j.Driver
 }
 
 const (
@@ -45,8 +46,8 @@ const (
 )
 
 //NewCypherAnnotationsService instantiate driver
-func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection) service {
-	return service{cypherRunner, nil}
+func NewCypherAnnotationsService(cypherRunner neoutils.NeoConnection, driver neo4j.Driver) service {
+	return service{cypherRunner, driver}
 }
 
 // DecodeJSON decodes to a list of annotations, for ease of use this is a struct itself
@@ -198,6 +199,10 @@ func (s service) Initialise() error {
 	return s.conn.EnsureConstraints(map[string]string{
 		"Thing": "uuid",
 	})
+}
+
+func (s service) Close() error {
+	return s.neoDriver.Close()
 }
 
 func createAnnotationRelationship(relation string) (statement string) {

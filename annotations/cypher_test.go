@@ -8,6 +8,7 @@ import (
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
+	"github.com/neo4j/neo4j-go-driver/neo4j"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -493,7 +494,10 @@ func getAnnotationsService(t *testing.T) service {
 	db, err := neoutils.Connect(url, conf)
 	assert.NoError(err, "Failed to connect to Neo4j")
 
-	return NewCypherAnnotationsService(db)
+	driver, err := neo4j.NewDriver("bolt+routing://localhost:7474/db/data", neo4j.NoAuth())
+	assert.NoError(err, "Failed to create Neo4j object")
+
+	return NewCypherAnnotationsService(db, driver)
 }
 
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, annotationLifecycle string, expectedAnnotations []Annotation) {

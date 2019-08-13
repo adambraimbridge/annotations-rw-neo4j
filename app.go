@@ -20,6 +20,7 @@ import (
 	status "github.com/Financial-Times/service-status-go/httphandlers"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
+	"github.com/neo4j/neo4j-go-driver/neo4j"
 	"github.com/rcrowley/go-metrics"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -33,6 +34,12 @@ func main() {
 		Value:  "http://localhost:7474/db/data",
 		Desc:   "neo4j endpoint URL",
 		EnvVar: "NEO_URL",
+	})
+	neoRoutingURL := app.String(cli.StringOpt{
+		Name:   "neoRoutingUrl",
+		Value:  "bolt+routing://localhost:7687/db/data",
+		Desc:   "Neo4j endpoint URL with bolt+routing protocol",
+		EnvVar: "NEO_ROUTING_URL",
 	})
 	port := app.Int(cli.IntOpt{
 		Name:   "port",
@@ -109,7 +116,7 @@ func main() {
 		logger.InitLogger(*appName, *logLevel)
 		logger.WithFields(map[string]interface{}{"port": *port, "neoURL": *neoURL}).Infof("Service %s has successfully started.", *appName)
 
-		annotationsService := setupAnnotationsService(*neoURL, *batchSize)
+		annotationsService := setupAnnotationsService(*neoURL, *neoRoutingURL, *batchSize)
 		healtcheckHandler := healthCheckHandler{annotationsService: annotationsService}
 		originMap, lifecycleMap, messageType := readConfigMap(*config)
 
@@ -148,7 +155,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
+func setupAnnotationsService(neoURL, neoRoutingURL string, bathSize int) annotations.Service {
 	conf := neoutils.DefaultConnectionConfig()
 	conf.BatchSize = bathSize
 	db, err := neoutils.Connect(neoURL, conf)
@@ -157,13 +164,18 @@ func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
 		logger.WithError(err).Fatal("Error connecting to Neo4j")
 	}
 
-	annotationsService := annotations.NewCypherAnnotationsService(db)
+	driver, err := neo4j.NewDriver(neoRoutingURL, neo4j.NoAuth())
+	if err != nil {
+		logger.WithError(err).Fatal("Error setting up Neo4j driver")
+	}
+
+	annotationsService := annotations.NewCypherAnnotationsService(db, driver)
 	err = annotationsService.Initialise()
 	if err != nil {
 		logger.Errorf("annotations service has not been initalised correctly %s", err)
 	}
 
-	return annotations.NewCypherAnnotationsService(db)
+	return annotations.NewCypherAnnotationsService(db, driver)
 }
 
 func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {

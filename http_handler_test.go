@@ -283,3 +283,8 @@ func (as *mockAnnotationsService) Initialise() error {
 	args := as.Called()
 	return args.Error(0)
 }
+
+func (as *mockAnnotationsService) Close() error {
+	args := as.Called()
+	return args.Error(0)
+}
