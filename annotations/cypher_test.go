@@ -494,7 +494,7 @@ func getAnnotationsService(t *testing.T) service {
 	db, err := neoutils.Connect(url, conf)
 	assert.NoError(err, "Failed to connect to Neo4j")
 
-	driver, err := neo4j.NewDriver("bolt+routing://localhost:7474/db/data", neo4j.NoAuth())
+	driver, err := neo4j.NewDriver("bolt+routing://localhost:7687", neo4j.NoAuth())
 	assert.NoError(err, "Failed to create Neo4j object")
 
 	return NewCypherAnnotationsService(db, driver)
