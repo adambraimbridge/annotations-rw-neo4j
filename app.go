@@ -37,7 +37,7 @@ func main() {
 	})
 	neoRoutingURL := app.String(cli.StringOpt{
 		Name:   "neoRoutingUrl",
-		Value:  "bolt+routing://localhost:7687/db/data",
+		Value:  "bolt+routing://localhost:7687",
 		Desc:   "Neo4j endpoint URL with bolt+routing protocol",
 		EnvVar: "NEO_ROUTING_URL",
 	})
@@ -164,7 +164,9 @@ func setupAnnotationsService(neoURL, neoRoutingURL string, bathSize int) annotat
 		logger.WithError(err).Fatal("Error connecting to Neo4j")
 	}
 
-	driver, err := neo4j.NewDriver(neoRoutingURL, neo4j.NoAuth())
+	driver, err := neo4j.NewDriver(neoRoutingURL, neo4j.NoAuth(), func(config *neo4j.Config) {
+		config.Log = neo4j.ConsoleLogger(neo4j.DEBUG)
+	})
 	if err != nil {
 		logger.WithError(err).Fatal("Error setting up Neo4j driver")
 	}
