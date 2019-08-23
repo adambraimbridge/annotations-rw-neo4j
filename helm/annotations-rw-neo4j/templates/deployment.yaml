@@ -44,7 +44,7 @@ spec:
             valueFrom:
               configMapKeyRef:
                 name: global-config
-                key: neo4j.bold.routing.url
+                key: neo4j.bolt.routing.url
         - name: BATCH_SIZE 
           valueFrom: 
             configMapKeyRef: 

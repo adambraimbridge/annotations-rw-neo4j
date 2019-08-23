@@ -58,7 +58,9 @@ func (s service) DecodeJSON(dec *json.Decoder) (interface{}, error) {
 }
 
 func (s service) Read(contentUUID string, tid string, annotationLifecycle string) (thing interface{}, found bool, err error) {
-	results := []Annotation{}
+	var session neo4j.Session
+	var records []neo4j.Record
+
 	//TODO shouldn't return Provenances if none of the scores, agentRole or atTime are set
 	statementTemplate := `
 			MATCH (c:Thing{uuid:{contentUUID}})-[rel{lifecycle:{annotationLifecycle}}]->(cc:Thing)
@@ -73,23 +75,33 @@ func (s service) Read(contentUUID string, tid string, annotationLifecycle string
 
 	statement := fmt.Sprintf(statementTemplate, relevanceScoringSystem, confidenceScoringSystem)
 
-	query := &neoism.CypherQuery{
-		Statement:  statement,
-		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": annotationLifecycle},
-		Result:     &results,
-	}
-	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", results)
-	if err := s.conn.CypherBatch([]*neoism.CypherQuery{query}); err != nil {
-		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Errorf("Error executing delete queries in neo4j!")
+	if session, err = s.neoDriver.Session(neo4j.AccessModeRead); err != nil {
 		return Annotations{}, false, err
 	}
-	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", results)
-	if (len(results)) == 0 {
+	defer session.Close()
+
+	records, err = neo4j.Collect(session.ReadTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+		return tx.Run(statement, map[string]interface{}{"contentUUID": contentUUID, "annotationLifecycle": annotationLifecycle})
+	}))
+
+	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", records)
+	if len(records) < 1 {
 		return Annotations{}, false, nil
 	}
 
-	for idx := range results {
-		mapToResponseFormat(&results[idx])
+	var results []Annotation
+	for _, record := range records {
+		a := Annotation{}
+		recordThing, ok := record.Get("thing")
+		if ok {
+			thingMap, okmM := recordThing.(map[string]interface{})
+			if okmM {
+				a.Thing.ID = (thingMap["id"]).(string)
+				a.Thing.Predicate = (thingMap["predicate"]).(string)
+			}
+		}
+		mapToResponseFormat(&a)
+		results = append(results, a)
 	}
 
 	return Annotations(results), true, nil
@@ -140,7 +152,16 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		logger.WithTransactionID(tid).WithUUID(contentUUID).Info("No annotations supplied for content")
 	}
 
-	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
+	type writeQueries struct {
+		statement string
+		params    map[string]interface{}
+	}
+	var driverQueries []writeQueries
+
+	delQuery := buildDeleteQuery(contentUUID, annotationLifecycle, false)
+	queries := append([]*neoism.CypherQuery{}, delQuery)
+
+	driverQueries = append(driverQueries, writeQueries{statement: delQuery.Statement, params: delQuery.Parameters})
 
 	var statements []string
 	for _, annotationToWrite := range annotationsToWrite {
@@ -151,13 +172,28 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 		}
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
+		driverQueries = append(driverQueries, writeQueries{statement: query.Statement, params: query.Parameters})
 	}
 
 	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Writing statements to neo4j: %v", statements)
-	if err := s.conn.CypherBatch(queries); err != nil {
-		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error executing write queries in neo4j!")
+
+	var session neo4j.Session
+	var err error
+	if session, err = s.neoDriver.Session(neo4j.AccessModeWrite); err != nil {
 		return err
 	}
+	defer session.Close()
+
+	for _, q := range driverQueries {
+		_, err = session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+			return tx.Run(q.statement, q.params)
+		})
+		if err != nil {
+			logger.WithTransactionID(tid).WithUUID(contentUUID).WithError(err)
+			return err
+		}
+	}
+
 	return nil
 }
 
