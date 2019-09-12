@@ -9,7 +9,7 @@ import (
 
 	"time"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
 )
 
 type healthCheckHandler struct {

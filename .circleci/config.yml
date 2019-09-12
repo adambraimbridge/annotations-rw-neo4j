@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.11.1
+      - image: golang:1
       - image: neo4j:3.4.10-enterprise
         environment:
           NEO4J_AUTH: none
@@ -22,22 +22,23 @@ jobs:
       - run:
           name: External Dependencies
           command: |
-            go get github.com/mattn/goveralls
-            go get -u github.com/jstemmer/go-junit-report
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            GO111MODULE=off go get github.com/mattn/goveralls
+            GO111MODULE=off go get -u github.com/jstemmer/go-junit-report
+            curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.18.0
+            git clone git@github.com:Financial-Times/upp-coding-standard.git
       - run:
           name: Create test folder
           command: |
             mkdir -p ${CIRCLE_TEST_REPORTS}
             mkdir -p ${CIRCLE_COVERAGE_REPORT}
             mkdir -p ${CIRCLE_ARTIFACTS}
-
-      - run:
-          name: Download vendored dependencies
-          command: dep ensure -v -vendor-only
       - run:
           name: Go Build
-          command: go build -v
+          command: go build -mod=readonly -v
+      - run:
+          name: Run linters
+          command: |
+            golangci-lint run --new-from-rev=$(git rev-parse origin/master) --config upp-coding-standard/golangci-config/.golangci.yml
       - run: |
           go test -race -cover -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out ./... | go-junit-report > ${CIRCLE_TEST_REPORTS}/junit.xml
       - run: |
