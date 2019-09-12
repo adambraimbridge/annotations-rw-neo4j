@@ -122,6 +122,7 @@ func main() {
 		httpHandler.originMap = originMap
 		httpHandler.lifecycleMap = lifecycleMap
 		httpHandler.messageType = messageType
+		httpHandler.log = log
 
 		var p kafka.Producer
 		if *shouldForwardMessages {
