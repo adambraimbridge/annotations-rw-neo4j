@@ -6,7 +6,7 @@ import (
 
 	"io/ioutil"
 
-	"github.com/Financial-Times/go-logger"
+	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -23,11 +23,12 @@ type QueueHandlerTestSuite struct {
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	tid                string
+	log                *logger.UPPLogger
 }
 
 func (suite *QueueHandlerTestSuite) SetupTest() {
 	var err error
-	logger.InitDefaultLogger("annotations-rw")
+	suite.log = logger.NewUPPInfoLogger("annotations-rw")
 	suite.tid = "tid_sample"
 	suite.headers = createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
@@ -56,6 +57,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 		producer:           suite.producer,
 		originMap:          suite.originMap,
 		lifecycleMap:       suite.lifecycleMap,
+		log:                suite.log,
 	}
 	qh.Ingest()
 
@@ -72,6 +74,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
 		producer:           nil,
 		originMap:          suite.originMap,
 		lifecycleMap:       suite.lifecycleMap,
+		log:                suite.log,
 	}
 	qh.Ingest()
 
@@ -89,6 +92,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_JsonError() {
 		producer:           suite.producer,
 		originMap:          suite.originMap,
 		lifecycleMap:       suite.lifecycleMap,
+		log:                suite.log,
 	}
 	qh.Ingest()
 

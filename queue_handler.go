@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
-	"github.com/Financial-Times/go-logger"
+	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/transactionid-utils-go"
 	"github.com/pkg/errors"
@@ -17,6 +17,7 @@ type queueHandler struct {
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	messageType        string
+	log                *logger.UPPLogger
 }
 
 //Note: this will only work for annotation messages, and not for suggestion
@@ -51,15 +52,15 @@ func (qh *queueHandler) Ingest() {
 
 		err = qh.annotationsService.Write(annMsg.UUID, lifecycle, platformVersion, tid, annMsg.Annotations)
 		if err != nil {
-			logger.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).WithError(err).Error("Cannot write to Neo4j")
+			qh.log.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).WithError(err).Error("Cannot write to Neo4j")
 			return errors.Wrapf(err, "Failed to write message with tid=%s and uuid=%s", tid, annMsg.UUID)
 		}
 
-		logger.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Infof("%s successfully written in Neo4j", qh.messageType)
+		qh.log.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Infof("%s successfully written in Neo4j", qh.messageType)
 
 		//forward message to the next queue
 		if qh.producer != nil {
-			logger.WithTransactionID(tid).WithUUID(annMsg.UUID).Info("Forwarding message to the next queue")
+			qh.log.WithTransactionID(tid).WithUUID(annMsg.UUID).Info("Forwarding message to the next queue")
 			return qh.producer.SendMessage(message)
 		}
 		return nil

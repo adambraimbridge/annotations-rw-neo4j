@@ -1,13 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
-
-	"encoding/json"
-	"io/ioutil"
 	"os/signal"
 	"syscall"
 
@@ -144,6 +143,7 @@ func main() {
 			qh.originMap = originMap
 			qh.lifecycleMap = lifecycleMap
 			qh.messageType = messageType
+			qh.log = log
 			qh.Ingest()
 
 			go func() {
