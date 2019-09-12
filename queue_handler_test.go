@@ -38,7 +38,8 @@ func (suite *QueueHandlerTestSuite) SetupTest() {
 	suite.annotationsService = new(mockAnnotationsService)
 	suite.producer = new(mockProducer)
 
-	suite.originMap, suite.lifecycleMap, _ = readConfigMap("annotation-config.json")
+	suite.originMap, suite.lifecycleMap, _, err = readConfigMap("annotation-config.json")
+	assert.NoError(suite.T(), err, "Unexpected config error")
 }
 
 func TestQueueHandlerTestSuite(t *testing.T) {
