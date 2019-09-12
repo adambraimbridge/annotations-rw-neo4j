@@ -22,6 +22,7 @@ type HealthCheckHandlerTestSuite struct {
 func (suite *HealthCheckHandlerTestSuite) SetupTest() {
 	suite.annotationsService = new(mockAnnotationsService)
 	suite.httpHandler = httpHandler{}
+	suite.log = logger.NewUPPInfoLogger("annotations-rw")
 }
 func TestHealthCheckHandlerTestSuite(t *testing.T) {
 	suite.Run(t, new(HealthCheckHandlerTestSuite))
