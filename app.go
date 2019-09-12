@@ -174,7 +174,7 @@ func setupAnnotationsService(neoURL string, bathSize int) (annotations.Service, 
 	annotationsService := annotations.NewCypherAnnotationsService(db)
 	err = annotationsService.Initialise()
 	if err != nil {
-		return nil, fmt.Errorf("annotations service has not been initalised correctly: %w", err)
+		return nil, fmt.Errorf("annotations service has not been initialised correctly: %w", err)
 	}
 
 	return annotations.NewCypherAnnotationsService(db), nil
