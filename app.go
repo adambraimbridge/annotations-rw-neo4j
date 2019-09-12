@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 
 	"encoding/json"
@@ -13,7 +12,7 @@ import (
 	"syscall"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
-	"github.com/Financial-Times/go-logger"
+	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
@@ -106,12 +105,18 @@ func main() {
 	})
 
 	app.Action = func() {
-		logger.InitLogger(*appName, *logLevel)
-		logger.WithFields(map[string]interface{}{"port": *port, "neoURL": *neoURL}).Infof("Service %s has successfully started.", *appName)
+		log := logger.NewUPPLogger(*appName, *logLevel)
+		log.WithFields(map[string]interface{}{"port": *port, "neoURL": *neoURL}).Infof("Service %s has successfully started.", *appName)
 
-		annotationsService := setupAnnotationsService(*neoURL, *batchSize)
+		annotationsService, err := setupAnnotationsService(*neoURL, *batchSize)
+		if err != nil {
+			log.WithError(err).Fatal("can't initialise annotations service")
+		}
 		healtcheckHandler := healthCheckHandler{annotationsService: annotationsService}
-		originMap, lifecycleMap, messageType := readConfigMap(*config)
+		originMap, lifecycleMap, messageType, err := readConfigMap(*config)
+		if err != nil {
+			log.WithError(err).Fatal("can't read service configuration")
+		}
 
 		httpHandler := httpHandler{annotationsService: annotationsService}
 		httpHandler.originMap = originMap
@@ -120,12 +125,18 @@ func main() {
 
 		var p kafka.Producer
 		if *shouldForwardMessages {
-			p = setupMessageProducer(*brokerAddress, *producerTopic)
+			p, err = setupMessageProducer(*brokerAddress, *producerTopic)
+			if err != nil {
+				log.WithError(err).Fatal("can't initialise message producer")
+			}
 			httpHandler.producer = p
 		}
 
 		if *shouldConsumeMessages {
-			consumer := setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
+			consumer, err := setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
+			if err != nil {
+				log.WithError(err).Fatal("can't initialise message consumer")
+			}
 			healtcheckHandler.consumer = consumer
 
 			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
@@ -136,45 +147,48 @@ func main() {
 
 			go func() {
 				waitForSignal()
-				logger.Infof("Shutting down Kafka consumer")
+				log.Infof("Shutting down Kafka consumer")
 				qh.consumer.Shutdown()
 			}()
 		}
 
-		http.Handle("/", router(&httpHandler, &healtcheckHandler))
-		startServer(*port)
+		http.Handle("/", router(&httpHandler, &healtcheckHandler, log))
+		err = startServer(*port)
+		if err != nil {
+			log.WithError(err).Fatal("http server error occurred")
+		}
 
 	}
 	app.Run(os.Args)
 }
 
-func setupAnnotationsService(neoURL string, bathSize int) annotations.Service {
+func setupAnnotationsService(neoURL string, bathSize int) (annotations.Service, error) {
 	conf := neoutils.DefaultConnectionConfig()
 	conf.BatchSize = bathSize
 	db, err := neoutils.Connect(neoURL, conf)
 
 	if err != nil {
-		logger.WithError(err).Fatal("Error connecting to Neo4j")
+		return nil, fmt.Errorf("error connecting to Neo4j: %w", err)
 	}
 
 	annotationsService := annotations.NewCypherAnnotationsService(db)
 	err = annotationsService.Initialise()
 	if err != nil {
-		logger.Errorf("annotations service has not been initalised correctly %s", err)
+		return nil, fmt.Errorf("annotations service has not been initalised correctly: %w", err)
 	}
 
-	return annotations.NewCypherAnnotationsService(db)
+	return annotations.NewCypherAnnotationsService(db), nil
 }
 
-func setupMessageProducer(brokerAddress string, producerTopic string) kafka.Producer {
+func setupMessageProducer(brokerAddress string, producerTopic string) (kafka.Producer, error) {
 	producer, err := kafka.NewProducer(brokerAddress, producerTopic, kafka.DefaultProducerConfig())
 	if err != nil {
-		logger.WithError(err).Fatal("Cannot start queue producer")
+		return nil, fmt.Errorf("cannot start queue producer: %w", err)
 	}
-	return producer
+	return producer, nil
 }
 
-func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) kafka.Consumer {
+func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) (kafka.Consumer, error) {
 
 	config := kafka.Config{
 		ZookeeperConnectionString: zookeeperAddress,
@@ -184,16 +198,16 @@ func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic s
 
 	consumer, err := kafka.NewConsumer(config)
 	if err != nil {
-		logger.WithError(err).Fatal("Cannot start queue consumer")
+		return nil, fmt.Errorf("cannot start queue consumer: %w", err)
 	}
-	return consumer
+	return consumer, nil
 }
 
-func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap map[string]string, messageType string) {
+func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap map[string]string, messageType string, err error) {
 
 	file, err := ioutil.ReadFile(jsonPath)
 	if err != nil {
-		logger.WithError(err).Fatal("Error reading configuration file")
+		return nil, nil, "", fmt.Errorf("error reading configuration file: %w", err)
 	}
 
 	type config struct {
@@ -204,18 +218,17 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	var c config
 	err = json.Unmarshal(file, &c)
 	if err != nil {
-		logger.WithError(err).Fatal("Error marshalling config file")
-
+		return nil, nil, "", fmt.Errorf("error marshalling config file: %w", err)
 	}
 
 	if c.MessageType == "" {
-		logger.WithError(errors.New("empty message type")).Fatal("Message type is not configured")
+		return nil, nil, "", fmt.Errorf("message type is not configured: %w", errors.New("empty message type"))
 	}
 
-	return c.OriginMap, c.LifecycleMap, c.MessageType
+	return c.OriginMap, c.LifecycleMap, c.MessageType, nil
 }
 
-func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
+func router(hh *httpHandler, hc *healthCheckHandler, log *logger.UPPLogger) *mux.Router {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
 
@@ -233,16 +246,17 @@ func router(hh *httpHandler, hc *healthCheckHandler) *mux.Router {
 	servicesRouter.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler).Methods("GET")
 
 	var monitoringRouter http.Handler = servicesRouter
-	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(logger.Logger(), monitoringRouter)
+	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log, monitoringRouter)
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
 	return servicesRouter
 }
 
-func startServer(port int) {
+func startServer(port int) error {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-		logger.WithError(err).Fatal("Unable to start server")
+		return fmt.Errorf("unable to start server: %w", err)
 	}
+	return nil
 }
 
 func waitForSignal() {
