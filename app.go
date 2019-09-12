@@ -122,6 +122,7 @@ func main() {
 		httpHandler.originMap = originMap
 		httpHandler.lifecycleMap = lifecycleMap
 		httpHandler.messageType = messageType
+		httpHandler.log = log
 
 		var p kafka.Producer
 		if *shouldForwardMessages {
@@ -194,7 +195,8 @@ func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic s
 		ZookeeperConnectionString: zookeeperAddress,
 		ConsumerGroup:             consumerGroup,
 		Topics:                    []string{topic},
-		ConsumerGroupConfig:       kafka.DefaultConsumerConfig()}
+		ConsumerGroupConfig:       kafka.DefaultConsumerConfig(),
+	}
 
 	consumer, err := kafka.NewConsumer(config)
 	if err != nil {
@@ -228,7 +230,7 @@ func readConfigMap(jsonPath string) (originMap map[string]string, lifecycleMap m
 	return c.OriginMap, c.LifecycleMap, c.MessageType, nil
 }
 
-func router(hh *httpHandler, hc *healthCheckHandler, log *logger.UPPLogger) *mux.Router {
+func router(hh *httpHandler, hc *healthCheckHandler, log *logger.UPPLogger) http.Handler {
 	servicesRouter := mux.NewRouter()
 	servicesRouter.Headers("Content-type: application/json")
 
@@ -249,7 +251,7 @@ func router(hh *httpHandler, hc *healthCheckHandler, log *logger.UPPLogger) *mux
 	monitoringRouter = httphandlers.TransactionAwareRequestLoggingHandler(log, monitoringRouter)
 	monitoringRouter = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, monitoringRouter)
 
-	return servicesRouter
+	return monitoringRouter
 }
 
 func startServer(port int) error {
