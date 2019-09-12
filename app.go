@@ -144,6 +144,7 @@ func main() {
 			qh.originMap = originMap
 			qh.lifecycleMap = lifecycleMap
 			qh.messageType = messageType
+			qh.log = log
 			qh.Ingest()
 
 			go func() {
