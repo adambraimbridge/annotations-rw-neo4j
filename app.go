@@ -133,7 +133,8 @@ func main() {
 		}
 
 		if *shouldConsumeMessages {
-			consumer, err := setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
+			var consumer kafka.Consumer
+			consumer, err = setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
 			if err != nil {
 				log.WithError(err).Fatal("can't initialise message consumer")
 			}

@@ -72,9 +72,9 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
 	suite.producer.On("SendMessage", mock.Anything).Return(nil).Once()
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusCreated == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusCreated))
 	assert.JSONEq(suite.T(), message("Annotations for content 12345 created"), rec.Body.String(), "Wrong body")
 	suite.producer.AssertExpectations(suite.T())
@@ -83,26 +83,26 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
 func (suite *HttpHandlerTestSuite) TestPutHandler_ParseError() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", []byte(`{"id": "1234"}`))
 	request.Header.Add("X-Request-Id", "tid_sample")
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusBadRequest))
 }
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ValidationError() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", []byte(`"{"thing": {"prefLabel": "Apple"}`))
 	request.Header.Add("X-Request-Id", "tid_sample")
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusBadRequest))
 }
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_NotJson() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "text/html", suite.body)
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusBadRequest))
 }
 
@@ -110,9 +110,9 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
 	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(errors.New("Write failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusServiceUnavailable == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusServiceUnavailable))
 }
 
@@ -120,9 +120,9 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_InvalidPredicate() {
 	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(annotations.UnsupportedPredicateErr)
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusBadRequest == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusBadRequest))
 }
 
@@ -131,9 +131,9 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {
 	suite.producer.On("SendMessage", mock.Anything).Return(errors.New("Forwarding failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
 	request.Header.Add("X-Request-Id", "tid_sample")
-	httpHandler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
+	handler := httpHandler{suite.annotationsService, suite.producer, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
-	router(&httpHandler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
+	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
 	assert.True(suite.T(), http.StatusInternalServerError == rec.Code, fmt.Sprintf("Wrong response code, was %d, should be %d", rec.Code, http.StatusInternalServerError))
 }
 
