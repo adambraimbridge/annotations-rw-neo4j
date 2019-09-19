@@ -237,7 +237,7 @@ func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations,
 		return err
 	}
 
-	hh.log.WithTransactionID(tid).WithUUID(uuid).Info("Forwarding message to the next queue")
+	hh.log.WithTransactionID(tid).WithUUID(uuid).Debug("Forwarding message to the next queue")
 	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 
