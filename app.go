@@ -12,7 +12,7 @@ import (
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
 	logger "github.com/Financial-Times/go-logger/v2"
-	"github.com/Financial-Times/http-handlers-go/httphandlers"
+	"github.com/Financial-Times/http-handlers-go/v2/httphandlers"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
