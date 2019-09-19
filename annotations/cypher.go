@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
@@ -75,12 +74,9 @@ func (s service) Read(contentUUID string, tid string, annotationLifecycle string
 		Parameters: neoism.Props{"contentUUID": contentUUID, "annotationLifecycle": annotationLifecycle},
 		Result:     &results,
 	}
-	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", results)
 	if err := s.conn.CypherBatch([]*neoism.CypherQuery{query}); err != nil {
-		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Errorf("Error executing delete queries in neo4j!")
-		return Annotations{}, false, err
+		return Annotations{}, false, fmt.Errorf("error executing delete queries: %w", err)
 	}
-	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Query returned following results: %v", results)
 	if (len(results)) == 0 {
 		return Annotations{}, false, nil
 	}
@@ -98,16 +94,14 @@ func (s service) Read(contentUUID string, tid string, annotationLifecycle string
 func (s service) Delete(contentUUID string, tid string, annotationLifecycle string) (bool, error) {
 
 	query := buildDeleteQuery(contentUUID, annotationLifecycle, true)
-	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Sending delete queries to neo4j: %v", query)
 
 	if err := s.conn.CypherBatch([]*neoism.CypherQuery{query}); err != nil {
-		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error executing delete queries in neo4j!")
+		return false, fmt.Errorf("error executing delete queries: %w", err)
 	}
 
 	stats, err := query.Stats()
 	if err != nil {
-		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error running stats on delete queries")
-		return false, err
+		return false, fmt.Errorf("error running stats on delete queries: %w", err)
 	}
 
 	return stats.ContainsUpdates, err
@@ -118,23 +112,14 @@ func (s service) Delete(contentUUID string, tid string, annotationLifecycle stri
 func (s service) Write(contentUUID string, annotationLifecycle string, platformVersion string, tid string, thing interface{}) error {
 	annotationsToWrite, ok := thing.(Annotations)
 	if ok == false {
-		err := fmt.Errorf("thing is not of type Annotations")
-		logger.WithTransactionID(tid).WithUUID(contentUUID).Error(err.Error())
-		return err
+		return errors.New("thing is not of type Annotations")
 	}
 	if contentUUID == "" {
-		err := fmt.Errorf("content uuid is required")
-		logger.WithTransactionID(tid).WithUUID(contentUUID).Error(err.Error())
-		return err
+		return errors.New("content uuid is required")
 	}
 
 	if err := validateAnnotations(&annotationsToWrite); err != nil {
-		logger.WithTransactionID(tid).WithUUID(contentUUID).WithError(err).Error("Validation of supplied annotations failed")
 		return err
-	}
-
-	if len(annotationsToWrite) == 0 {
-		logger.WithTransactionID(tid).WithUUID(contentUUID).Info("No annotations supplied for content")
 	}
 
 	queries := append([]*neoism.CypherQuery{}, buildDeleteQuery(contentUUID, annotationLifecycle, false))
@@ -143,17 +128,14 @@ func (s service) Write(contentUUID string, annotationLifecycle string, platformV
 	for _, annotationToWrite := range annotationsToWrite {
 		query, err := createAnnotationQuery(contentUUID, annotationToWrite, platformVersion, annotationLifecycle)
 		if err != nil {
-			logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Create annotation query failed")
-			return err
+			return fmt.Errorf("create annotation query failed: %w", err)
 		}
 		statements = append(statements, query.Statement)
 		queries = append(queries, query)
 	}
 
-	logger.WithTransactionID(tid).WithUUID(contentUUID).Debugf("Writing statements to neo4j: %v", statements)
 	if err := s.conn.CypherBatch(queries); err != nil {
-		logger.WithError(err).WithTransactionID(tid).WithUUID(contentUUID).Error("Error executing write queries in neo4j!")
-		return err
+		return fmt.Errorf("executing write queries in neo4j failed: %w", err)
 	}
 	return nil
 }
@@ -185,8 +167,7 @@ func (s service) Count(annotationLifecycle string, platformVersion string) (int,
 	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	if err != nil {
-		logger.WithError(err).Error("Error executing count query in neo4j!")
-		return 0, err
+		return 0, fmt.Errorf("executing count query in neo4j failed: %w", err)
 	}
 
 	return results[0].Count, nil
