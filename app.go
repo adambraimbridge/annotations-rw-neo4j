@@ -104,7 +104,8 @@ func main() {
 	})
 
 	app.Action = func() {
-		log := logger.NewUPPLogger(*appName, *logLevel)
+		logConf := logger.KeyNamesConfig{KeyTime: "@time"}
+		log := logger.NewUPPLogger(*appName, *logLevel, logConf)
 		log.WithFields(map[string]interface{}{"port": *port, "neoURL": *neoURL}).Infof("Service %s has successfully started.", *appName)
 
 		annotationsService, err := setupAnnotationsService(*neoURL, *batchSize)
