@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	standardlog "log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -192,6 +193,10 @@ func setupMessageProducer(brokerAddress string, producerTopic string) (kafka.Pro
 }
 
 func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) (kafka.Consumer, error) {
+	// discard the output of zookeeper library
+	noneLogger := standardlog.New(ioutil.Discard, "", 0)
+	groupConfig := kafka.DefaultConsumerConfig()
+	groupConfig.Zookeeper.Logger = noneLogger
 
 	config := kafka.Config{
 		ZookeeperConnectionString: zookeeperAddress,
