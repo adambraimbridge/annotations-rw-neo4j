@@ -304,7 +304,7 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 func TestWriteFailsForInvalidPredicate(t *testing.T) {
 	annotationsDriver = getAnnotationsService(t)
 	err := annotationsDriver.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, Annotations{conceptWithInvalidPredicate})
-	assert.EqualError(t, err, "Unsupported predicate")
+	assert.EqualError(t, err, "create annotation query failed: Unsupported predicate")
 }
 
 func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {

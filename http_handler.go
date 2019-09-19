@@ -57,6 +57,7 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	annotations, found, err := hh.annotationsService.Read(uuid, tid, lifecycle)
 	if err != nil {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("failed getting annotations")
 		msg := fmt.Sprintf("Error getting annotations (%v)", err)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
@@ -95,6 +96,7 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	found, err := hh.annotationsService.Delete(uuid, tid, lifecycle)
 	if err != nil {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("failed deleting annotations")
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -176,11 +178,13 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, tid, anns)
 	if err == annotations.UnsupportedPredicateErr {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("invalid predicate provided")
 		writeJSONError(w, "Please provide a valid predicate, or leave blank for the default predicate (MENTIONS)", http.StatusBadRequest)
 		return
 	}
 
 	if err != nil {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("failed writing annotations")
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {
 			writeJSONError(w, msg, http.StatusBadRequest)
