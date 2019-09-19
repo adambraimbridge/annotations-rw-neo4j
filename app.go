@@ -192,12 +192,17 @@ func setupMessageProducer(brokerAddress string, producerTopic string) (kafka.Pro
 }
 
 func setupMessageConsumer(zookeeperAddress string, consumerGroup string, topic string) (kafka.Consumer, error) {
+	// discard the output of zookeeper library
+	noneLogger := logger.NewUPPInfoLogger("annotations-rw-neo4j-kafka-consumer")
+	noneLogger.SetOutput(ioutil.Discard)
+	groupConfig := kafka.DefaultConsumerConfig()
+	groupConfig.Zookeeper.Logger = noneLogger
 
 	config := kafka.Config{
 		ZookeeperConnectionString: zookeeperAddress,
 		ConsumerGroup:             consumerGroup,
 		Topics:                    []string{topic},
-		ConsumerGroupConfig:       kafka.DefaultConsumerConfig(),
+		ConsumerGroupConfig:       groupConfig,
 	}
 
 	consumer, err := kafka.NewConsumer(config)
