@@ -9,8 +9,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/annotations"
-	"github.com/Financial-Times/go-logger"
+	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
+	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/transactionid-utils-go"
 	"github.com/gorilla/mux"
@@ -30,6 +30,7 @@ type httpHandler struct {
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	messageType        string
+	log                *logger.UPPLogger
 }
 
 // GetAnnotations returns a view of the annotations written - it is NOT the public annotations API, and
@@ -56,6 +57,7 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	annotations, found, err := hh.annotationsService.Read(uuid, tid, lifecycle)
 	if err != nil {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("failed getting annotations")
 		msg := fmt.Sprintf("Error getting annotations (%v)", err)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
@@ -65,7 +67,7 @@ func (hh *httpHandler) GetAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	annotationJson, _ := json.Marshal(annotations)
-	logger.Debugf("Annotations for content (uuid:%s): %s\n", uuid, annotationJson)
+	hh.log.Debugf("Annotations for content (uuid:%s): %s\n", uuid, annotationJson)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(annotations)
@@ -94,6 +96,7 @@ func (hh *httpHandler) DeleteAnnotations(w http.ResponseWriter, r *http.Request)
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	found, err := hh.annotationsService.Delete(uuid, tid, lifecycle)
 	if err != nil {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("failed deleting annotations")
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -175,21 +178,23 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	tid := transactionidutils.GetTransactionIDFromRequest(r)
 	err = hh.annotationsService.Write(uuid, lifecycle, platformVersion, tid, anns)
 	if err == annotations.UnsupportedPredicateErr {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("invalid predicate provided")
 		writeJSONError(w, "Please provide a valid predicate, or leave blank for the default predicate (MENTIONS)", http.StatusBadRequest)
 		return
 	}
 
 	if err != nil {
+		hh.log.WithUUID(uuid).WithTransactionID(tid).WithError(err).Error("failed writing annotations")
 		msg := fmt.Sprintf("Error creating annotations (%v)", err)
 		if _, ok := err.(annotations.ValidationError); ok {
 			writeJSONError(w, msg, http.StatusBadRequest)
 			return
 		}
-		logger.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).WithError(err).Error(msg)
+		hh.log.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).WithError(err).Error(msg)
 		writeJSONError(w, msg, http.StatusServiceUnavailable)
 		return
 	}
-	logger.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Infof("%s successfully written in Neo4j", hh.messageType)
+	hh.log.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Infof("%s successfully written in Neo4j", hh.messageType)
 
 	if hh.producer != nil {
 		var originSystem string
@@ -207,7 +212,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		err = hh.forwardMessage(uuid, anns, tid, originSystem)
 		if err != nil {
 			msg := "Failed to forward message to queue"
-			logger.WithTransactionID(tid).WithUUID(uuid).WithError(err).Error(msg)
+			hh.log.WithTransactionID(tid).WithUUID(uuid).WithError(err).Error(msg)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(jsonMessage(msg)))
 			return
@@ -232,7 +237,7 @@ func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations,
 		return err
 	}
 
-	logger.WithTransactionID(tid).WithUUID(uuid).Info("Forwarding message to the next queue")
+	hh.log.WithTransactionID(tid).WithUUID(uuid).Debug("Forwarding message to the next queue")
 	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 
