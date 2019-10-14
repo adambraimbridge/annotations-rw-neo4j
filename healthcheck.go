@@ -60,7 +60,7 @@ func (h healthCheckHandler) readQueueCheck() fthealth.Check {
 		Severity:         1,
 		BusinessImpact:   "Content V1 Metadata can't be read from queue. This will negatively impact V1 metadata availability.",
 		TechnicalSummary: "Read message queue is not reachable/healthy",
-		PanicGuide:       "https://dewey.ft.com/",
+		PanicGuide:       "https://runbooks.in.ft.com/annotations-rw-neo4j",
 		Checker:          h.checkKafkaConnectivity,
 	}
 }
@@ -72,7 +72,7 @@ func (h healthCheckHandler) writerCheck() fthealth.Check {
 		Severity:         1,
 		BusinessImpact:   "Unable to respond to Annotation API requests",
 		TechnicalSummary: "Cannot connect to Neo4j a instance with at least one person loaded in it",
-		PanicGuide:       "https://dewey.ft.com/",
+		PanicGuide:       "https://runbooks.in.ft.com/annotations-rw-neo4j",
 		Checker:          h.Checker,
 	}
 }
