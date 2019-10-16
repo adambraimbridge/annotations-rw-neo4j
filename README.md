@@ -5,22 +5,41 @@ __A service and an API for reading/writing annotations into Neo4j.
 If the consumer is enabled: the messages are consumed from the queue, they get written into Neo4j, and finally, if the producer is also enabled, they got forwarded into the next (PostAnnotations) queue.
 The above flow can be initiated by the PUT endpoint as well. In this case, the service expects the annotations json to be supplied in the format that comes out of the annotations consumer.__
 
-## Installation
-* `go get -u github.com/kardianos/govendor`
-* `go get -u github.com/Financial-Times/annotations-rw-neo4j`
-* `cd $GOPATH/src/github.com/Financial-Times/annotations-rw-neo4j`
-* `govendor sync`
-* `go build .`
+## Build from source
+* download the source code of the project in a directory of your choice
+* `cd {the-chosen-directory}/annotations-rw-neo4j`
+* `go build -mod=readonly`
 
 ## Running locally
-* `govendor test -v -race`
-* `go install`
-* `$GOPATH/bin/annotations-rw-neo4j [--help]`
+* `{the-chosen-directory}/annotations-rw-neo4j [--help]`
 
-You have more options here:
+You have the following options here:
 - run neo4j and kafka locally (by docker, or as native apps)
 - open a tunnel to one of your team clusters that your app can connect to
 - disable the functionality that requires kafka by setting the env var `SHOULD_FORWARD_MESSAGES=false`
+
+Command line options:
+```
+--neoUrl                  neo4j endpoint URL (env $NEO_URL) (default "http://localhost:7474/db/data")
+--port                    Port to listen on (env $APP_PORT) (default 8080)
+--batchSize               Maximum number of statements to execute per batch (env $BATCH_SIZE) (default 1024)
+--logLevel                Logging level (DEBUG, INFO, WARN, ERROR) (env $LOG_LEVEL) (default "INFO")
+--lifecycleConfigPath     Json Config file - containing two config maps: one for originHeader to lifecycle, another for lifecycle to platformVersion mappings.  (env $LIFECYCLE_CONFIG_PATH) (default "annotation-config.json")
+--zookeeperAddress        Address of the zookeeper service (env $ZOOKEEPER_ADDRESS) (default "localhost:2181")
+--shouldConsumeMessages   Boolean value specifying if this service should consume messages from the specified topic (env $SHOULD_CONSUME_MESSAGES)
+--consumerGroup           Kafka consumer group name (env $CONSUMER_GROUP)
+--consumerTopic           Kafka consumer topic name (env $CONSUMER_TOPIC)
+--brokerAddress           Kafka address (env $BROKER_ADDRESS) (default "localhost:9092")
+--producerTopic           Topic to which received messages will be forwarded (env $PRODUCER_TOPIC) (default "PostPublicationMetadataEvents")
+--shouldForwardMessages   Decides if annotations messages should be forwarded to a post publication queue (env $SHOULD_FORWARD_MESSAGES) (default true)
+--appName                 Name of the service (env $APP_NAME) (default "annotations-rw")
+```
+
+## Running unit tests locally
+* Start the local Neo4j instance
+`docker run --rm -e NEO4J_ACCEPT_LICENSE_AGREEMENT=yes -e NEO4J_AUTH=none -p 7474:7474 -p 7687:7687 -it neo4j:3.4.10-enterprise`
+* Run the unit tests
+`go test ./... -race`
 
 ## Endpoints
 
