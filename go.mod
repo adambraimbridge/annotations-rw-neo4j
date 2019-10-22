@@ -22,7 +22,6 @@ require (
 	github.com/jawher/mow.cli v1.0.4
 	github.com/jmcvetta/neoism v1.3.1
 	github.com/jmcvetta/randutil v0.0.0-20150817122601-2bb1b664bcff // indirect
-	github.com/joho/godotenv v1.3.0
 	github.com/myesui/uuid v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.3.0+incompatible // indirect
 	github.com/pkg/errors v0.8.0
