@@ -17,10 +17,8 @@ import (
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
 	"github.com/gorilla/mux"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
-
-	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
@@ -133,6 +131,7 @@ func main() {
 			httpHandler.producer = p
 		}
 
+		var qh queueHandler
 		if *shouldConsumeMessages {
 			var consumer kafka.Consumer
 			consumer, err = setupMessageConsumer(*zookeeperAddress, *consumerGroup, *consumerTopic)
@@ -141,28 +140,35 @@ func main() {
 			}
 			healtcheckHandler.consumer = consumer
 
-			qh := queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
+			qh = queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
 			qh.originMap = originMap
 			qh.lifecycleMap = lifecycleMap
 			qh.messageType = messageType
 			qh.log = log
 			qh.Ingest()
-
-			go func() {
-				waitForSignal()
-				log.Infof("Shutting down Kafka consumer")
-				qh.consumer.Shutdown()
-			}()
 		}
 
 		http.Handle("/", router(&httpHandler, &healtcheckHandler, log))
-		err = startServer(*port)
-		if err != nil {
-			log.WithError(err).Fatal("http server error occurred")
-		}
 
+		go func() {
+			err = startServer(*port)
+			if err != nil {
+				log.WithError(err).Fatal("http server error occurred")
+			}
+		}()
+
+		waitForSignal()
+		if *shouldConsumeMessages {
+			log.Infof("Shutting down Kafka consumer")
+			qh.consumer.Shutdown()
+		}
 	}
-	app.Run(os.Args)
+
+	err := app.Run(os.Args)
+	if err != nil {
+		fmt.Printf("app could not start: %s", err)
+		return
+	}
 }
 
 func setupAnnotationsService(neoURL string, bathSize int) (annotations.Service, error) {
@@ -269,7 +275,7 @@ func startServer(port int) error {
 }
 
 func waitForSignal() {
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
 }
