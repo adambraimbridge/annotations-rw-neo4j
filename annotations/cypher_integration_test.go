@@ -16,13 +16,12 @@ import (
 var annotationsService Service
 
 const (
-	brandUUID                 = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
-	v1PlatformVersion         = "v1"
-	nextVideoPlatformVersion  = "next-video"
-	brightcovePlatformVersion = "brightcove"
-	contentLifecycle          = "content"
-	v1AnnotationLifecycle     = "annotations-v1"
-	tid                       = "transaction_id"
+	brandUUID                = "8e21cbd4-e94b-497a-a43b-5b2309badeb3"
+	v1PlatformVersion        = "v1"
+	nextVideoPlatformVersion = "next-video"
+	contentLifecycle         = "content"
+	v1AnnotationLifecycle    = "annotations-v1"
+	tid                      = "transaction_id"
 )
 
 func TestConstraintsApplied(t *testing.T) {
@@ -70,8 +69,8 @@ func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: "http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM", Value: 0.9},
-					Score{ScoringSystem: "http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM", Value: 0.8},
+					{ScoringSystem: "http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM", Value: 0.9},
+					{ScoringSystem: "http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM", Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -101,8 +100,8 @@ func TestWriteFailsForInvalidPredicate(t *testing.T) {
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: "http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM", Value: 0.9},
-					Score{ScoringSystem: "http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM", Value: 0.8},
+					{ScoringSystem: "http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM", Value: 0.9},
+					{ScoringSystem: "http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM", Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -236,7 +235,7 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLi
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
 	result := []struct {
-		Uuid string `json:"b.uuid"`
+		UUID string `json:"b.uuid"`
 	}{}
 
 	getContentQuery := &neoism.CypherQuery{
@@ -268,7 +267,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		},
 	}
 
-	conn.CypherBatch([]*neoism.CypherQuery{createContentQuery})
+	assert.NoError(conn.CypherBatch([]*neoism.CypherQuery{createContentQuery}))
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}})
@@ -283,7 +282,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		},
 	}
 
-	err := conn.CypherBatch([]*neoism.CypherQuery{contentQuery})
+	assert.NoError(conn.CypherBatch([]*neoism.CypherQuery{contentQuery}))
 
 	assert.NoError(annotationsService.Write(contentUUID, v1AnnotationLifecycle, v1PlatformVersion, tid, exampleConcepts(conceptUUID)), "Failed to write annotation")
 	found, err := annotationsService.Delete(contentUUID, tid, v1AnnotationLifecycle)
@@ -291,7 +290,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
 
 	result := []struct {
-		Uuid string `json:"b.uuid"`
+		UUID string `json:"b.uuid"`
 	}{}
 
 	//CHECK THAT ALL THE v1 annotations were updated
@@ -334,7 +333,7 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 		},
 	}
 
-	conn.CypherBatch([]*neoism.CypherQuery{removeRelationshipQuery})
+	assert.NoError(conn.CypherBatch([]*neoism.CypherQuery{removeRelationshipQuery}))
 }
 
 func TestWriteAndReadMultipleAnnotations(t *testing.T) {
@@ -444,10 +443,6 @@ func getNeoConnection(t *testing.T) neoutils.NeoConnection {
 	return db
 }
 
-// func getAnnotationsService() Service {
-// 	return NewCypherAnnotationsService(db)
-// }
-
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, annotationLifecycle string, expectedAnnotations []Annotation) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
@@ -489,68 +484,6 @@ func checkNodeIsStillPresent(uuid string, t *testing.T) {
 	assert.NoError(err, "UnexpectedError")
 	assert.True(len(results) == 1, "Didn't find a node")
 	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
-}
-
-func checkConceptNodeIsStillPresent(uuid string, t *testing.T) {
-	assert := assert.New(t)
-	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
-	results := []struct {
-		UUID string `json:"uuid"`
-	}{}
-
-	query := &neoism.CypherQuery{
-		Statement: `MATCH (n:Thing)<-[IDENTIFIER]-(upp:UPPIdentifier{value:{uuid}}) return n.uuid
-		as uuid`,
-		Parameters: map[string]interface{}{
-			"uuid": uuid,
-		},
-		Result: &results,
-	}
-
-	err := conn.CypherBatch([]*neoism.CypherQuery{query})
-	assert.NoError(err, "UnexpectedError")
-	assert.True(len(results) == 1, "Didn't find a node")
-	assert.Equal(uuid, results[0].UUID, "Did not find correct node")
-}
-
-func writeClassifedByRelationship(db neoutils.CypherRunner, contentId string, conceptId string, lifecycle string, t *testing.T, assert *assert.Assertions) {
-
-	var annotateQuery string
-	var qs []*neoism.CypherQuery
-
-	if lifecycle == "" {
-		annotateQuery = `
-                MERGE (content:Thing{uuid:{contentId}})
-                MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
-                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
-                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1'}]->(concept)
-          `
-		qs = []*neoism.CypherQuery{
-			{
-				Statement:  annotateQuery,
-				Parameters: neoism.Props{"contentId": contentId, "conceptId": conceptId},
-			},
-		}
-	} else {
-		annotateQuery = `
-                MERGE (content:Thing{uuid:{contentId}})
-                MERGE (upp:Identifier:UPPIdentifier{value:{conceptId}})
-                MERGE (upp)-[:IDENTIFIES]->(concept:Thing) ON CREATE SET concept.uuid = {conceptId}
-                MERGE (content)-[pred:IS_CLASSIFIED_BY {platformVersion:'v1', lifecycle: {lifecycle}}]->(concept)
-          `
-		qs = []*neoism.CypherQuery{
-			{
-				Statement:  annotateQuery,
-				Parameters: neoism.Props{"contentId": contentId, "conceptId": conceptId, "lifecycle": lifecycle},
-			},
-		}
-
-	}
-
-	err := db.CypherBatch(qs)
-	assert.NoError(err)
 }
 
 func checkRelationship(t *testing.T, assert *assert.Assertions, contentID string, platformVersion string) {
@@ -595,22 +528,40 @@ func cleanDB(t *testing.T, assert *assert.Assertions) {
 	annotationsService = NewCypherAnnotationsService(conn)
 	qs := []*neoism.CypherQuery{
 		{
-			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", contentUUID),
+			Statement: "MATCH (mc:Thing {uuid: {contentUUID}}) DETACH DELETE mc",
+			Parameters: map[string]interface{}{
+				"contentUUID": contentUUID,
+			},
 		},
 		{
-			Statement: fmt.Sprintf("MATCH (fc:Identifier {value: '%v'}) DETACH DELETE fc", conceptUUID),
+			Statement: "MATCH (fc:Identifier {value: {conceptUUID}}) DETACH DELETE fc",
+			Parameters: map[string]interface{}{
+				"conceptUUID": conceptUUID,
+			},
 		},
 		{
-			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", conceptUUID),
+			Statement: "MATCH (fc:Thing {uuid: {conceptUUID}}) DETACH DELETE fc",
+			Parameters: map[string]interface{}{
+				"conceptUUID": conceptUUID,
+			},
 		},
 		{
-			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", secondConceptUUID),
+			Statement: "MATCH (fc:Thing {uuid: {secondConceptUUID}}) DETACH DELETE fc",
+			Parameters: map[string]interface{}{
+				"secondConceptUUID": secondConceptUUID,
+			},
 		},
 		{
-			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", oldConceptUUID),
+			Statement: "MATCH (fc:Thing {uuid: {oldConceptUUID}}) DETACH DELETE fc",
+			Parameters: map[string]interface{}{
+				"oldConceptUUID": oldConceptUUID,
+			},
 		},
 		{
-			Statement: fmt.Sprintf("MATCH (fc:Thing {uuid: '%v'}) DETACH DELETE fc", brandUUID),
+			Statement: "MATCH (fc:Thing {uuid: {brandUUID}}) DETACH DELETE fc",
+			Parameters: map[string]interface{}{
+				"brandUUID": brandUUID,
+			},
 		},
 	}
 

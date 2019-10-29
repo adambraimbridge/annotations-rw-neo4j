@@ -24,8 +24,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "",
 				AtTime:    "",
@@ -45,8 +45,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -66,8 +66,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -87,8 +87,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -108,8 +108,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -130,8 +130,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -152,8 +152,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -172,8 +172,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -190,8 +190,8 @@ var (
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.4},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.5},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.4},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.5},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
@@ -212,8 +212,8 @@ func exampleConcept(uuid string) Annotation {
 		Provenances: []Provenance{
 			{
 				Scores: []Score{
-					Score{ScoringSystem: relevanceScoringSystem, Value: 0.9},
-					Score{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+					{ScoringSystem: confidenceScoringSystem, Value: 0.8},
 				},
 				AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
 				AtTime:    "2016-01-01T19:43:47.314Z",
