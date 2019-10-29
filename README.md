@@ -40,7 +40,12 @@ Command line options:
 `docker run --rm -e NEO4J_ACCEPT_LICENSE_AGREEMENT=yes -e NEO4J_AUTH=none -p 7474:7474 -p 7687:7687 -it neo4j:3.4.10-enterprise`
 
 * Run unit tests only: `go test -race ./...`
-* Run unit and integration tests: `go test -race -tags=integration ./...`
+* Run unit and integration tests:
+    ```
+    docker-compose -f docker-compose-tests.yml up -d --build && \
+    docker logs -f test-runner && \
+    docker-compose -f docker-compose-tests.yml down -v
+    ```
 
 ## Endpoints
 
