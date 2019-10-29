@@ -341,6 +341,51 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	logger.InitDefaultLogger("annotations-rw")
 	conn := getNeoConnection(t)
 	annotationsService = NewCypherAnnotationsService(conn)
+
+	multiConceptAnnotations := Annotations{
+		Annotation{
+			Thing: Thing{ID: getURI(conceptUUID),
+				PrefLabel: "prefLabel",
+				Types: []string{
+					"http://www.ft.com/ontology/organisation/Organisation",
+					"http://www.ft.com/ontology/core/Thing",
+					"http://www.ft.com/ontology/concept/Concept",
+				},
+				Predicate: "hasBrand",
+			},
+			Provenances: []Provenance{
+				{
+					Scores: []Score{
+						{ScoringSystem: relevanceScoringSystem, Value: 0.9},
+						{ScoringSystem: confidenceScoringSystem, Value: 0.8},
+					},
+					AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+					AtTime:    "2016-01-01T19:43:47.314Z",
+				},
+			},
+		},
+		Annotation{
+			Thing: Thing{ID: getURI(secondConceptUUID),
+				PrefLabel: "prefLabel",
+				Types: []string{
+					"http://www.ft.com/ontology/organisation/Organisation",
+					"http://www.ft.com/ontology/core/Thing",
+					"http://www.ft.com/ontology/concept/Concept",
+				},
+			},
+			Provenances: []Provenance{
+				{
+					Scores: []Score{
+						{ScoringSystem: relevanceScoringSystem, Value: 0.4},
+						{ScoringSystem: confidenceScoringSystem, Value: 0.5},
+					},
+					AgentRole: "http://api.ft.com/things/0edd3c31-1fd0-4ef6-9230-8d545be3880a",
+					AtTime:    "2016-01-01T19:43:47.314Z",
+				},
+			},
+		},
+	}
+
 	assert.NoError(annotationsService.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, multiConceptAnnotations), "Failed to write annotation")
 
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, multiConceptAnnotations)
@@ -459,6 +504,10 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 		// In annotations write, we don't store anything other than ID for the concept (so type will only be 'Thing' and pref label will not
 		// be present UNLESS the concept has been written by some other system)
 		assert.Equal(expectedAnnotation.Thing.ID, storedAnnotation.Thing.ID, "Thing ID not the same")
+
+		expectedPredicate, err := getRelationshipFromPredicate(expectedAnnotation.Thing.Predicate)
+		assert.NoError(err, "error getting relationship from predicate %s", expectedAnnotation.Thing.Predicate)
+		assert.Equal(expectedPredicate, storedAnnotation.Thing.Predicate, "Thing Predicates not the same")
 	}
 }
 

@@ -37,6 +37,7 @@ func TestGetRelationshipFromPredicate(t *testing.T) {
 		{"", "MENTIONS"},
 		{"about", "ABOUT"},
 		{"hasAuthor", "HAS_AUTHOR"},
+		{"hasBrand", "HAS_BRAND"},
 	}
 
 	for _, test := range tests {
@@ -110,4 +111,15 @@ func TestCreateAnnotationQueryWithImplicitlyClassifiedByPredicate(t *testing.T) 
 	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
 	assert.Contains(query.Statement, "IMPLICITLY_CLASSIFIED_BY", "Relationship name is not inserted!")
 	assert.NotContains(query.Statement, "MENTIONS", "IMPLICITLY_CLASSIFIED_BY should be inserted instead of MENTIONS")
+}
+
+func TestCreateAnnotationQueryWithHasBrandPredicate(t *testing.T) {
+	assert := assert.New(t)
+	logger.InitDefaultLogger("annotations-rw")
+	annotationToWrite := conceptWithHasBrandPredicate
+
+	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
+	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+	assert.Contains(query.Statement, "HAS_BRAND", "Relationship name is not inserted!")
+	assert.NotContains(query.Statement, "MENTIONS", "HAS_BRAND should be inserted instead of MENTIONS")
 }

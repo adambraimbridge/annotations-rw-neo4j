@@ -45,4 +45,5 @@ var relations = map[string]string{
 	"hasAuthor":               "HAS_AUTHOR",
 	"hasContributor":          "HAS_CONTRIBUTOR",
 	"hasDisplayTag":           "HAS_DISPLAY_TAG",
+	"hasBrand":                "HAS_BRAND",
 }
