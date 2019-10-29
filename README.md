@@ -35,11 +35,12 @@ Command line options:
 --appName                 Name of the service (env $APP_NAME) (default "annotations-rw")
 ```
 
-## Running unit tests locally
+## Running tests locally
 * Start the local Neo4j instance
 `docker run --rm -e NEO4J_ACCEPT_LICENSE_AGREEMENT=yes -e NEO4J_AUTH=none -p 7474:7474 -p 7687:7687 -it neo4j:3.4.10-enterprise`
-* Run the unit tests
-`go test ./... -race`
+
+* Run unit tests only: `go test -race ./...`
+* Run unit and integration tests: `go test -race -tags=integration ./...`
 
 ## Endpoints
 
