@@ -27,6 +27,78 @@ func TestCreateAnnotationQuery(t *testing.T) {
 	assert.Equal(v2PlatformVersion, params["platformVersion"], fmt.Sprintf("\nExpected: %s\nActual: %s", v2PlatformVersion, params["platformVersion"]))
 }
 
+func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
+	testCases := []struct {
+		name              string
+		relationship      string
+		annotationToWrite Annotation
+		lifecycle         string
+		platformVersion   string
+	}{
+		{
+			name:              "isClassifiedBy",
+			relationship:      "IS_CLASSIFIED_BY",
+			annotationToWrite: conceptWithPredicate,
+			platformVersion:   v2PlatformVersion,
+			lifecycle:         v2AnnotationLifecycle,
+		},
+		{
+			name:              "about",
+			relationship:      "ABOUT",
+			annotationToWrite: conceptWithAboutPredicate,
+			platformVersion:   v2PlatformVersion,
+			lifecycle:         v2AnnotationLifecycle,
+		},
+		{
+			name:              "hasAuthor",
+			relationship:      "HAS_AUTHOR",
+			annotationToWrite: conceptWithHasAuthorPredicate,
+			platformVersion:   v2PlatformVersion,
+			lifecycle:         v2AnnotationLifecycle,
+		},
+		{
+			name:              "hasContributor",
+			relationship:      "HAS_CONTRIBUTOR",
+			annotationToWrite: conceptWithHasContributorPredicate,
+			platformVersion:   pacPlatformVersion,
+			lifecycle:         pacAnnotationLifecycle,
+		},
+		{
+			name:              "hasDisplayTag",
+			relationship:      "HAS_DISPLAY_TAG",
+			annotationToWrite: conceptWithHasDisplayTagPredicate,
+			platformVersion:   pacPlatformVersion,
+			lifecycle:         pacAnnotationLifecycle,
+		},
+		{
+			name:              "implicitlyClassifiedBy",
+			relationship:      "IMPLICITLY_CLASSIFIED_BY",
+			annotationToWrite: conceptWithImplicitlyClassifiedByPredicate,
+			platformVersion:   pacPlatformVersion,
+			lifecycle:         pacAnnotationLifecycle,
+		},
+		{
+			name:              "hasBrand",
+			relationship:      "HAS_BRAND",
+			annotationToWrite: conceptWithHasBrandPredicate,
+			platformVersion:   pacPlatformVersion,
+			lifecycle:         pacAnnotationLifecycle,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			assert := assert.New(t)
+			logger.InitDefaultLogger("annotations-rw")
+			query, err := createAnnotationQuery(contentUUID, test.annotationToWrite, test.platformVersion, test.lifecycle)
+
+			assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
+			assert.Contains(query.Statement, test.relationship, "Relationship name is not inserted!")
+			assert.NotContains(query.Statement, "MENTIONS", fmt.Sprintf("%s should be inserted instead of MENTIONS", test.relationship))
+		})
+	}
+}
+
 func TestGetRelationshipFromPredicate(t *testing.T) {
 	var tests = []struct {
 		predicate    string
@@ -48,78 +120,4 @@ func TestGetRelationshipFromPredicate(t *testing.T) {
 			t.Errorf("\nExpected: %s\nActual: %s", test.relationship, actualRelationship)
 		}
 	}
-}
-
-func TestCreateAnnotationQueryWithPredicate(t *testing.T) {
-	assert := assert.New(t)
-	logger.InitDefaultLogger("annotations-rw")
-	annotationToWrite := conceptWithPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "IS_CLASSIFIED_BY", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "IS_CLASSIFIED_BY should be inserted instead of MENTIONS")
-}
-
-func TestCreateAnnotationQueryWithAboutPredicate(t *testing.T) {
-	assert := assert.New(t)
-	logger.InitDefaultLogger("annotations-rw")
-	annotationToWrite := conceptWithAboutPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "ABOUT", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "ABOUT should be inserted instead of MENTIONS")
-}
-
-func TestCreateAnnotationQueryWithHasAuthorPredicate(t *testing.T) {
-	assert := assert.New(t)
-	logger.InitDefaultLogger("annotations-rw")
-	annotationToWrite := conceptWithHasAuthorPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, v2AnnotationLifecycle, v2PlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "HAS_AUTHOR", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "HAS_AUTHOR should be inserted instead of MENTIONS")
-}
-
-func TestCreateAnnotationQueryWithHasContributorPredicate(t *testing.T) {
-	assert := assert.New(t)
-	annotationToWrite := conceptWithHasContributorPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "HAS_CONTRIBUTOR", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "HAS_CONTRIBUTOR should be inserted instead of MENTIONS")
-}
-
-func TestCreateAnnotationQueryWithHasDisplayTagPredicate(t *testing.T) {
-	assert := assert.New(t)
-	annotationToWrite := conceptWithHasDisplayTagPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "HAS_DISPLAY_TAG", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "HAS_DISPLAY_TAG should be inserted instead of MENTIONS")
-}
-
-func TestCreateAnnotationQueryWithImplicitlyClassifiedByPredicate(t *testing.T) {
-	assert := assert.New(t)
-	annotationToWrite := conceptWithImplicitlyClassifiedByPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "IMPLICITLY_CLASSIFIED_BY", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "IMPLICITLY_CLASSIFIED_BY should be inserted instead of MENTIONS")
-}
-
-func TestCreateAnnotationQueryWithHasBrandPredicate(t *testing.T) {
-	assert := assert.New(t)
-	logger.InitDefaultLogger("annotations-rw")
-	annotationToWrite := conceptWithHasBrandPredicate
-
-	query, err := createAnnotationQuery(contentUUID, annotationToWrite, pacAnnotationLifecycle, pacPlatformVersion)
-	assert.NoError(err, "Cypher query for creating annotations couldn't be created.")
-	assert.Contains(query.Statement, "HAS_BRAND", "Relationship name is not inserted!")
-	assert.NotContains(query.Statement, "MENTIONS", "HAS_BRAND should be inserted instead of MENTIONS")
 }
