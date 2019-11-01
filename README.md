@@ -36,9 +36,6 @@ Command line options:
 ```
 
 ## Running tests locally
-* Start the local Neo4j instance
-`docker run --rm -e NEO4J_ACCEPT_LICENSE_AGREEMENT=yes -e NEO4J_AUTH=none -p 7474:7474 -p 7687:7687 -it neo4j:3.4.10-enterprise`
-
 * Run unit tests only: `go test -race ./...`
 * Run unit and integration tests:
     ```
@@ -101,6 +98,8 @@ NB: /content/{contentId}/annotations/mentions/{conceptId} also existed in the ol
 that functionality in this app.
 
 
-## Healthchecks
-* Check connectivity [http://localhost:8080/__health](http://localhost:8080/__health)
+## Admin Endpoints
+* Health checks: [http://localhost:8080/__health](http://localhost:8080/__health)
+* Good to go: [http://localhost:8080/__gtg](http://localhost:8080/__gtg)
+* Build info: [http://localhost:8080/__build-info](http://localhost:8080/__build-info)
 * Ping: [http://localhost:8080/__ping](http://localhost:8080/__ping)
