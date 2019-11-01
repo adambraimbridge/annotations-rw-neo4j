@@ -347,7 +347,7 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 			Thing: Thing{ID: getURI(conceptUUID),
 				PrefLabel: "prefLabel",
 				Types: []string{
-					"http://www.ft.com/ontology/organisation/Organisation",
+					"http://www.ft.com/ontology/product/Brand",
 					"http://www.ft.com/ontology/core/Thing",
 					"http://www.ft.com/ontology/concept/Concept",
 				},

@@ -165,7 +165,7 @@ var (
 		Thing: Thing{ID: getURI(oldConceptUUID),
 			PrefLabel: "prefLabel",
 			Types: []string{
-				"http://www.ft.com/ontology/organisation/Organisation",
+				"http://www.ft.com/ontology/product/Brand",
 				"http://www.ft.com/ontology/core/Thing",
 				"http://www.ft.com/ontology/concept/Concept",
 			},
