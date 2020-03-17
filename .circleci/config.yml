@@ -1,78 +1,20 @@
 version: 2.1
+
 orbs:
-    ft-snyk-orb: financial-times/ft-snyk-orb@0.0.12
-jobs:
-  build:
-    docker:
-      - image: golang:1
-      - image: neo4j:3.4.10-enterprise
-        environment:
-          NEO4J_AUTH: none
-          NEO4J_HEAP_MEMORY: 256
-          NEO4J_CACHE_MEMORY: 256M
-          NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
-
-    working_directory: /go/src/github.com/Financial-Times/annotations-rw-neo4j
-    environment:
-          NEO4J_TEST_URL: "http://localhost:7474/db/data/"
-          CIRCLE_TEST_REPORTS: /tmp/test-reports
-          CIRCLE_COVERAGE_REPORT: /tmp/coverage-results
-          CIRCLE_ARTIFACTS: /tmp/artifacts
-
-    steps:
-      - checkout
-      - run:
-          name: External Dependencies
-          command: |
-            GO111MODULE=off go get github.com/mattn/goveralls
-            GO111MODULE=off go get -u github.com/jstemmer/go-junit-report
-            curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.18.0
-            wget https://raw.githubusercontent.com/Financial-Times/upp-coding-standard/v1.0.0/golangci-config/.golangci.yml
-      - run:
-          name: Create test folder
-          command: |
-            mkdir -p ${CIRCLE_TEST_REPORTS}
-            mkdir -p ${CIRCLE_COVERAGE_REPORT}
-            mkdir -p ${CIRCLE_ARTIFACTS}
-      - run:
-          name: Go Build
-          command: go build -mod=readonly -v
-      - run:
-          name: Run linters
-          command: |
-            golangci-lint run --new-from-rev=$(git rev-parse origin/master) --config .golangci.yml --build-tags=integration
-      - run: |
-          go test -tags=integration -mod=readonly -race -cover -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out ./... | go-junit-report > ${CIRCLE_TEST_REPORTS}/junit.xml
-      - run: |
-          goveralls -coverprofile=$CIRCLE_COVERAGE_REPORT/coverage.out -service=circle-ci -repotoken=$COVERALLS_TOKEN
-      - store_test_results:
-          path: /tmp/test-reports
-
-      - store_artifacts:
-          path: /tmp/artifacts
-          destination: build
-
-  docker_build:
-    docker:
-      - image: docker:18.03
-    steps:
-      - checkout
-      - setup_remote_docker
-      - run:
-          name: Build Dockerfile
-          command: docker build .
+  ft-golang-ci: financial-times/golang-ci@1
 
 workflows:
-  version: 2.1
   tests_and_docker:
     jobs:
-      - build
-      - docker_build:
+      - ft-golang-ci/build-and-test:
+          name: build-and-test-project
+          executor-name: ft-golang-ci/default-with-neo4j
+      - ft-golang-ci/docker-build:
+          name: build-docker-image
           requires:
-            - build
-      - ft-snyk-orb/scan-go-packages:
-          name: snyk-scan
-          context: org-global
-          token-variable: SNYK_TOKEN
-          requires:
-            - docker_build
+            - build-and-test-project
+  snyk-scanning:
+    jobs:
+      - ft-golang-ci/scan:
+          name: scan-dependencies
+          context: cm-team-snyk
