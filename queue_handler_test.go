@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"testing"
 
-	"io/ioutil"
+	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
 
 	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/kafka-client-go/kafka"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -19,10 +21,11 @@ type QueueHandlerTestSuite struct {
 	message            kafka.FTMessage
 	queueMessage       queueMessage
 	annotationsService *mockAnnotationsService
-	producer           *mockProducer
+	forwarder          *forwarder.MockForwarder
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	tid                string
+	originSystem       string
 	log                *logger.UPPLogger
 }
 
@@ -30,14 +33,15 @@ func (suite *QueueHandlerTestSuite) SetupTest() {
 	var err error
 	suite.log = logger.NewUPPInfoLogger("annotations-rw")
 	suite.tid = "tid_sample"
-	suite.headers = createHeader(suite.tid, "http://cmdb.ft.com/systems/methode-web-pub")
+	suite.originSystem = "http://cmdb.ft.com/systems/methode-web-pub"
+	suite.forwarder = new(forwarder.MockForwarder)
+	suite.headers = suite.forwarder.CreateHeaders(suite.tid, suite.originSystem)
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
 	assert.NoError(suite.T(), err, "Unexpected error")
 	suite.message = kafka.NewFTMessage(suite.headers, string(suite.body))
 	err = json.Unmarshal(suite.body, &suite.queueMessage)
 	assert.NoError(suite.T(), err, "Unexpected error")
 	suite.annotationsService = new(mockAnnotationsService)
-	suite.producer = new(mockProducer)
 
 	suite.originMap, suite.lifecycleMap, _, err = readConfigMap("annotation-config.json")
 	assert.NoError(suite.T(), err, "Unexpected config error")
@@ -49,12 +53,12 @@ func TestQueueHandlerTestSuite(t *testing.T) {
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Annotations).Return(nil)
-	suite.producer.On("SendMessage", suite.message).Return(nil)
+	suite.forwarder.On("SendMessage", suite.tid, suite.originSystem, suite.headers, suite.queueMessage.UUID, suite.queueMessage.Annotations).Return(nil)
 
 	qh := &queueHandler{
 		annotationsService: suite.annotationsService,
 		consumer:           mockConsumer{message: suite.message},
-		producer:           suite.producer,
+		forwarder:          suite.forwarder,
 		originMap:          suite.originMap,
 		lifecycleMap:       suite.lifecycleMap,
 		log:                suite.log,
@@ -62,7 +66,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	qh.Ingest()
 
 	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Annotations)
-	suite.producer.AssertCalled(suite.T(), "SendMessage", suite.message)
+	suite.forwarder.AssertCalled(suite.T(), "SendMessage", suite.tid, suite.originSystem, suite.headers, suite.queueMessage.UUID, suite.queueMessage.Annotations)
 }
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
@@ -71,7 +75,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
 	qh := queueHandler{
 		annotationsService: suite.annotationsService,
 		consumer:           mockConsumer{message: suite.message},
-		producer:           nil,
+		forwarder:          nil,
 		originMap:          suite.originMap,
 		lifecycleMap:       suite.lifecycleMap,
 		log:                suite.log,
@@ -79,7 +83,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {
 	qh.Ingest()
 
 	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Annotations)
-	suite.producer.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
+	suite.forwarder.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
 }
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_JsonError() {
@@ -89,13 +93,13 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_JsonError() {
 	qh := &queueHandler{
 		annotationsService: suite.annotationsService,
 		consumer:           mockConsumer{message: message},
-		producer:           suite.producer,
+		forwarder:          suite.forwarder,
 		originMap:          suite.originMap,
 		lifecycleMap:       suite.lifecycleMap,
 		log:                suite.log,
 	}
 	qh.Ingest()
 
-	suite.producer.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
+	suite.forwarder.AssertNumberOfCalls(suite.T(), "SendMessage", 0)
 	suite.annotationsService.AssertNumberOfCalls(suite.T(), "Write", 0)
 }

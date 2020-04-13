@@ -11,14 +11,17 @@ import (
 	"syscall"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
+
 	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/http-handlers-go/v2/httphandlers"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
+
 	"github.com/gorilla/mux"
 	cli "github.com/jawher/mow.cli"
-	"github.com/rcrowley/go-metrics"
+	metrics "github.com/rcrowley/go-metrics"
 )
 
 func main() {
@@ -116,19 +119,26 @@ func main() {
 			log.WithError(err).Fatal("can't read service configuration")
 		}
 
-		httpHandler := httpHandler{annotationsService: annotationsService}
-		httpHandler.originMap = originMap
-		httpHandler.lifecycleMap = lifecycleMap
-		httpHandler.messageType = messageType
-		httpHandler.log = log
-
-		var p kafka.Producer
+		var f forwarder.QueueForwarder
 		if *shouldForwardMessages {
-			p, err = setupMessageProducer(*brokerAddress, *producerTopic)
-			if err != nil {
-				log.WithError(err).Fatal("can't initialise message producer")
+			p, setupErr := setupMessageProducer(*brokerAddress, *producerTopic)
+			if setupErr != nil {
+				log.WithError(setupErr).Fatal("can't initialise message producer")
 			}
-			httpHandler.producer = p
+
+			f = &forwarder.Forwarder{
+				Producer:    p,
+				MessageType: messageType,
+			}
+		}
+
+		hh := httpHandler{
+			annotationsService: annotationsService,
+			forwarder:          f,
+			originMap:          originMap,
+			lifecycleMap:       lifecycleMap,
+			messageType:        messageType,
+			log:                log,
 		}
 
 		var qh queueHandler
@@ -140,15 +150,20 @@ func main() {
 			}
 			healtcheckHandler.consumer = consumer
 
-			qh = queueHandler{annotationsService: annotationsService, consumer: consumer, producer: p}
-			qh.originMap = originMap
-			qh.lifecycleMap = lifecycleMap
-			qh.messageType = messageType
-			qh.log = log
+			qh = queueHandler{
+				annotationsService: annotationsService,
+				consumer:           consumer,
+				forwarder:          f,
+				originMap:          originMap,
+				lifecycleMap:       lifecycleMap,
+				messageType:        messageType,
+				log:                log,
+			}
+
 			qh.Ingest()
 		}
 
-		http.Handle("/", router(&httpHandler, &healtcheckHandler, log))
+		http.Handle("/", router(&hh, &healtcheckHandler, log))
 
 		go func() {
 			err = startServer(*port)
