@@ -22,21 +22,19 @@ require (
 	github.com/jawher/mow.cli v1.0.4
 	github.com/jmcvetta/neoism v1.3.1
 	github.com/jmcvetta/randutil v0.0.0-20150817122601-2bb1b664bcff // indirect
-	github.com/myesui/uuid v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.3.0+incompatible // indirect
 	github.com/pkg/errors v0.8.0
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
 	github.com/samuel/go-zookeeper v0.0.0-20180130194729-c4fab1ac1bec // indirect
+	github.com/satori/go.uuid v1.2.1-0.20181016170032-d91630c85102
 	github.com/sirupsen/logrus v1.1.0 // indirect
 	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/stretchr/testify v1.3.0
-	github.com/twinj/uuid v1.0.0
 	github.com/wvanbergen/kazoo-go v0.0.0-20180202103751-f72d8611297a // indirect
 	go4.org v0.0.0-20180809161055-417644f6feb5 // indirect
 	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0 // indirect
 	gopkg.in/jcmturner/goidentity.v3 v3.0.0 // indirect
 	gopkg.in/jmcvetta/napping.v3 v3.2.0 // indirect
-	gopkg.in/stretchr/testify.v1 v1.0.0-00010101000000-000000000000 // indirect
 )
 
 replace gopkg.in/stretchr/testify.v1 => github.com/stretchr/testify v1.4.0

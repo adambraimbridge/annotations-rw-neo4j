@@ -7,7 +7,7 @@ import (
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 
-	"github.com/twinj/uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type QueueForwarder interface {
@@ -33,10 +33,11 @@ func (f Forwarder) SendMessage(transactionID string, originSystem string, header
 
 func (f Forwarder) CreateHeaders(transactionID string, originSystem string) map[string]string {
 	const dateFormat = "2006-01-02T03:04:05.000Z0700"
+	messageUUID, _ := uuid.NewV4()
 	return map[string]string{
 		"X-Request-Id":      transactionID,
 		"Message-Timestamp": time.Now().Format(dateFormat),
-		"Message-Id":        uuid.NewV4().String(),
+		"Message-Id":        messageUUID.String(),
 		"Message-Type":      "concept-annotations",
 		"Content-Type":      "application/json",
 		"Origin-System-Id":  originSystem,
