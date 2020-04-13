@@ -4,31 +4,36 @@ import (
 	"encoding/json"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
+
 	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/kafka-client-go/kafka"
-	"github.com/Financial-Times/transactionid-utils-go"
+	transactionidutils "github.com/Financial-Times/transactionid-utils-go"
+
 	"github.com/pkg/errors"
 )
+
+// Note: this will only work for annotation messages, and not for suggestion
+// because suggestions-rw-neo4j has in its config shouldConsumeMessages set to false
+// and therefore the code bellow is not executed
+
+type queueMessage struct {
+	UUID        string
+	Annotations annotations.Annotations
+}
 
 type queueHandler struct {
 	annotationsService annotations.Service
 	consumer           kafka.Consumer
-	producer           kafka.Producer
+	forwarder          forwarder.QueueForwarder
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	messageType        string
 	log                *logger.UPPLogger
 }
 
-//Note: this will only work for annotation messages, and not for suggestion
-type queueMessage struct {
-	UUID        string
-	Annotations annotations.Annotations
-}
-
 func (qh *queueHandler) Ingest() {
 	qh.consumer.StartListening(func(message kafka.FTMessage) error {
-
 		tid, found := message.Headers[transactionidutils.TransactionIDHeader]
 		if !found {
 			return errors.New("Missing transaction id from message")
@@ -59,9 +64,9 @@ func (qh *queueHandler) Ingest() {
 		qh.log.WithMonitoringEvent("SaveNeo4j", tid, qh.messageType).WithUUID(annMsg.UUID).Infof("%s successfully written in Neo4j", qh.messageType)
 
 		//forward message to the next queue
-		if qh.producer != nil {
+		if qh.forwarder != nil {
 			qh.log.WithTransactionID(tid).WithUUID(annMsg.UUID).Debug("Forwarding message to the next queue")
-			return qh.producer.SendMessage(message)
+			return qh.forwarder.SendMessage(tid, originSystem, message.Headers, annMsg.UUID, annMsg.Annotations)
 		}
 		return nil
 	})

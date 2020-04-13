@@ -9,5 +9,5 @@
     "annotations-v1": "v1",
     "annotations-pac": "pac"
   },
-  "messageType": "Annotations"
+  "messageType": "annotations"
 }
