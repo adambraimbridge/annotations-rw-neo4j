@@ -50,6 +50,8 @@ func (f Forwarder) marshalAnnotations(uuid string, annotations annotations.Annot
 		f.MessageType: annotations,
 	}
 
+	// Given the type of data we are marshalling, there is no possible input that can trigger an error here
+	// but we are handling errors just to be principled
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return "", err
