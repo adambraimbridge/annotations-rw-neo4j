@@ -208,7 +208,7 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 
 	if hh.forwarder != nil {
 		hh.log.WithTransactionID(tid).WithUUID(uuid).Debug("Forwarding message to the next queue")
-		err = hh.forwarder.SendMessage(tid, originSystem, nil, uuid, anns)
+		err = hh.forwarder.SendMessage(tid, originSystem, uuid, anns)
 		if err != nil {
 			msg := "Failed to forward message to queue"
 			hh.log.WithTransactionID(tid).WithUUID(uuid).WithError(err).Error(msg)
