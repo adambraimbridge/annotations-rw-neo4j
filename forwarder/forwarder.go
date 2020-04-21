@@ -26,7 +26,7 @@ type outputMessage struct {
 
 // QueueForwarder is the interface implemented by types that can send annotation messages to a queue.
 type QueueForwarder interface {
-	SendMessage(transactionID string, originSystem string, headers map[string]string, uuid string, annotations annotations.Annotations) error
+	SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error
 }
 
 // A Forwarder facilitates sending a message to Kafka via kafka.Producer.
@@ -36,32 +36,14 @@ type Forwarder struct {
 }
 
 // SendMessage marshals an annotations payload using the outputMessage format and sends it to a Kafka.
-func (f Forwarder) SendMessage(transactionID string, originSystem string, headers map[string]string, uuid string, annotations annotations.Annotations) error {
-	if headers == nil {
-		headers = f.CreateHeaders(transactionID, originSystem)
-	}
-
+func (f Forwarder) SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error {
+	headers := CreateHeaders(transactionID, originSystem)
 	body, err := f.prepareBody(uuid, annotations, headers["Message-Timestamp"])
 	if err != nil {
 		return err
 	}
 
 	return f.Producer.SendMessage(kafka.NewFTMessage(headers, body))
-}
-
-// CreateHeaders returns the relevant map with all the necessary kafka.FTMessage headers
-// according to the specified transaction ID and origin system.
-func (f Forwarder) CreateHeaders(transactionID string, originSystem string) map[string]string {
-	const dateFormat = "2006-01-02T03:04:05.000Z0700"
-	messageUUID, _ := uuid.NewV4()
-	return map[string]string{
-		"X-Request-Id":      transactionID,
-		"Message-Timestamp": time.Now().Format(dateFormat),
-		"Message-Id":        messageUUID.String(),
-		"Message-Type":      "concept-annotation",
-		"Content-Type":      "application/json",
-		"Origin-System-Id":  originSystem,
-	}
 }
 
 func (f Forwarder) prepareBody(uuid string, anns annotations.Annotations, lastModified string) (string, error) {
@@ -82,4 +64,19 @@ func (f Forwarder) prepareBody(uuid string, anns annotations.Annotations, lastMo
 	}
 
 	return string(res), nil
+}
+
+// CreateHeaders returns the relevant map with all the necessary kafka.FTMessage headers
+// according to the specified transaction ID and origin system.
+func CreateHeaders(transactionID string, originSystem string) map[string]string {
+	const dateFormat = "2006-01-02T03:04:05.000Z0700"
+	messageUUID, _ := uuid.NewV4()
+	return map[string]string{
+		"X-Request-Id":      transactionID,
+		"Message-Timestamp": time.Now().Format(dateFormat),
+		"Message-Id":        messageUUID.String(),
+		"Message-Type":      "concept-annotation",
+		"Content-Type":      "application/json",
+		"Origin-System-Id":  originSystem,
+	}
 }

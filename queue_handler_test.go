@@ -35,7 +35,7 @@ func (suite *QueueHandlerTestSuite) SetupTest() {
 	suite.tid = "tid_sample"
 	suite.originSystem = "http://cmdb.ft.com/systems/methode-web-pub"
 	suite.forwarder = new(forwarder.MockForwarder)
-	suite.headers = suite.forwarder.CreateHeaders(suite.tid, suite.originSystem)
+	suite.headers = forwarder.CreateHeaders(suite.tid, suite.originSystem)
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
 	assert.NoError(suite.T(), err, "Unexpected error")
 	suite.message = kafka.NewFTMessage(suite.headers, string(suite.body))
@@ -53,7 +53,7 @@ func TestQueueHandlerTestSuite(t *testing.T) {
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	suite.annotationsService.On("Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Annotations).Return(nil)
-	suite.forwarder.On("SendMessage", suite.tid, suite.originSystem, suite.headers, suite.queueMessage.UUID, suite.queueMessage.Annotations).Return(nil)
+	suite.forwarder.On("SendMessage", suite.tid, suite.originSystem, suite.queueMessage.UUID, suite.queueMessage.Annotations).Return(nil)
 
 	qh := &queueHandler{
 		annotationsService: suite.annotationsService,
@@ -66,7 +66,7 @@ func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest() {
 	qh.Ingest()
 
 	suite.annotationsService.AssertCalled(suite.T(), "Write", suite.queueMessage.UUID, annotationLifecycle, platformVersion, suite.tid, suite.queueMessage.Annotations)
-	suite.forwarder.AssertCalled(suite.T(), "SendMessage", suite.tid, suite.originSystem, suite.headers, suite.queueMessage.UUID, suite.queueMessage.Annotations)
+	suite.forwarder.AssertCalled(suite.T(), "SendMessage", suite.tid, suite.originSystem, suite.queueMessage.UUID, suite.queueMessage.Annotations)
 }
 
 func (suite *QueueHandlerTestSuite) TestQueueHandler_Ingest_ProducerNil() {

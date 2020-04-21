@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"testing"
+	"time"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
 	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
@@ -17,9 +19,10 @@ type InputMessage struct {
 	UUID        string                  `json:"uuid"`
 }
 
+const transactionID = "example-transaction-id"
+const originSystem = "http://cmdb.ft.com/systems/pac"
+
 func TestSendMessage(t *testing.T) {
-	const transationID = "example-transaction-id"
-	const originSystem = "http://cmdb.ft.com/systems/pac"
 	const expectedAnnotationsOutputBody = `{"payload":{"annotations":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://annotations-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
 	const expectedSuggestionsOutputBody = `{"payload":{"suggestions":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://suggestions-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
 
@@ -34,34 +37,18 @@ func TestSendMessage(t *testing.T) {
 	}
 	tests := []struct {
 		name         string
-		headers      map[string]string
 		messageType  string
 		expectedBody string
 	}{
 		{
-			name:         "Annotations Message without Headers",
-			headers:      nil,
+			name:         "Annotations Message",
 			messageType:  "Annotations",
 			expectedBody: expectedAnnotationsOutputBody,
 		},
 		{
-			name:         "Suggestions Message without Headers",
-			headers:      nil,
+			name:         "Suggestions Message",
 			messageType:  "Suggestions",
 			expectedBody: expectedSuggestionsOutputBody,
-		},
-		{
-			name: "Use Incoming Kafka Message Headers",
-			headers: map[string]string{
-				"X-Request-Id":      transationID,
-				"Message-Timestamp": "2006-01-02T03:04:05.000Z",
-				"Message-Id":        "07109c55-3870-4260-8f77-d242c1014e9f",
-				"Message-Type":      "concept-annotation",
-				"Content-Type":      "application/json",
-				"Origin-System-Id":  originSystem,
-			},
-			messageType:  "annotations",
-			expectedBody: expectedAnnotationsOutputBody,
 		},
 	}
 
@@ -73,7 +60,7 @@ func TestSendMessage(t *testing.T) {
 				MessageType: test.messageType,
 			}
 
-			err = f.SendMessage(transationID, originSystem, test.headers, inputMessage.UUID, inputMessage.Annotations)
+			err = f.SendMessage(transactionID, originSystem, inputMessage.UUID, inputMessage.Annotations)
 			if err != nil {
 				t.Error("Error sending message")
 			}
@@ -82,13 +69,38 @@ func TestSendMessage(t *testing.T) {
 			if res.Body != fmt.Sprintf(test.expectedBody, res.Headers["Message-Timestamp"]) {
 				t.Errorf("Unexpected Kafka message processed, expected: \n`%s`\n\n but recevied: \n`%s`", test.expectedBody, res.Body)
 			}
-			if res.Headers["X-Request-Id"] != transationID {
-				t.Errorf("Unexpected Kafka X-Request-Id, expected `%s` but recevied `%s`", transationID, res.Headers["X-Request-Id"])
+			if res.Headers["X-Request-Id"] != transactionID {
+				t.Errorf("Unexpected Kafka X-Request-Id, expected `%s` but recevied `%s`", transactionID, res.Headers["X-Request-Id"])
 			}
 			if res.Headers["Origin-System-Id"] != originSystem {
 				t.Errorf("Unexpected Kafka Origin-System-Id, expected `%s` but recevied `%s`", originSystem, res.Headers["Origin-System-Id"])
 			}
 		})
+	}
+}
+
+func TestCreateHeaders(t *testing.T) {
+	headers := forwarder.CreateHeaders(transactionID, originSystem)
+
+	checkHeaders := map[string]string{
+		"X-Request-Id":     transactionID,
+		"Origin-System-Id": originSystem,
+		"Message-Type":     "concept-annotation",
+		"Content-Type":     "application/json",
+	}
+	for k, v := range checkHeaders {
+		if headers[k] != v {
+			t.Errorf("Unexpected %s, expected `%s` but recevied `%s`", k, v, headers[k])
+		}
+	}
+
+	const dateFormat = "2006-01-02T03:04:05.000Z0700"
+	if _, err := time.Parse(dateFormat, headers["Message-Timestamp"]); err != nil {
+		t.Errorf("Unexpected Message-Timestamp format, expected `%s` but recevied `%s`", dateFormat, headers["Message-Timestamp"])
+	}
+	r := regexp.MustCompile("^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[8|9|a|b][a-f0-9]{3}-[a-f0-9]{12}$")
+	if !r.MatchString(headers["Message-Id"]) {
+		t.Errorf("Unexpected Content-Type, expected UUID v4 but recevied `%s`", headers["Message-Id"])
 	}
 }
 
