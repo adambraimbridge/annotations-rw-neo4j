@@ -26,7 +26,7 @@ type OutputMessage struct {
 
 // QueueForwarder is the interface implemented by types that can send annotation messages to a queue.
 type QueueForwarder interface {
-	SendMessage(transactionID string, originSystem string, headers map[string]string, uuid string, annotations annotations.Annotations) error
+	SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error
 }
 
 // A Forwarder facilitates sending a message to Kafka via kafka.Producer.
@@ -36,11 +36,8 @@ type Forwarder struct {
 }
 
 // SendMessage marshals an annotations payload using the OutputMessage format and sends it to a Kafka.
-func (f Forwarder) SendMessage(transactionID string, originSystem string, headers map[string]string, uuid string, annotations annotations.Annotations) error {
-	if headers == nil {
-		headers = f.CreateHeaders(transactionID, originSystem)
-	}
-
+func (f Forwarder) SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error {
+	headers := f.CreateHeaders(transactionID, originSystem)
 	body, err := f.prepareBody(uuid, annotations, headers["Message-Timestamp"])
 	if err != nil {
 		return err
