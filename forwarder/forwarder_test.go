@@ -2,6 +2,7 @@ package forwarder_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -11,45 +12,46 @@ import (
 	"github.com/Financial-Times/kafka-client-go/kafka"
 )
 
+type InputMessage struct {
+	Annotations annotations.Annotations `json:"annotations"`
+	UUID        string                  `json:"uuid"`
+}
+
 func TestSendMessage(t *testing.T) {
-	p := new(mockProducer)
-	f := forwarder.Forwarder{
-		Producer:    p,
-		MessageType: "annotations",
-	}
+	const transationID = "example-transaction-id"
+	const originSystem = "http://cmdb.ft.com/systems/pac"
+	const expectedAnnotationsOutputBody = `{"payload":{"annotations":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://annotations-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
+	const expectedSuggestionsOutputBody = `{"payload":{"suggestions":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://suggestions-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
 
 	body, err := ioutil.ReadFile("../exampleAnnotationsMessage.json")
 	if err != nil {
 		t.Fatal("Unexpected error reading example message")
 	}
-	// The ordering of the properties is important.
-	// The encoding/json package marshals maps in sorted key order and structs in the order that the fields are declared.
-	message := struct {
-		Annotations annotations.Annotations `json:"annotations"`
-		UUID        string                  `json:"uuid"`
-	}{}
-	err = json.Unmarshal(body, &message)
+	inputMessage := InputMessage{}
+	err = json.Unmarshal(body, &inputMessage)
 	if err != nil {
 		t.Fatal("Unexpected error unmarshalling example message")
 	}
-	// Format body to be the same format as the expected output
-	body, err = json.Marshal(message)
-	if err != nil {
-		t.Fatal("Unexpected error re-marshalling example message")
-	}
-
-	transationID := "example-transaction-id"
-	originSystem := "http://cmdb.ft.com/systems/pac"
 	tests := []struct {
-		name    string
-		headers map[string]string
+		name         string
+		headers      map[string]string
+		messageType  string
+		expectedBody string
 	}{
 		{
-			name:    "Create Kafka Message Headers",
-			headers: nil,
+			name:         "Annotations Message without Headers",
+			headers:      nil,
+			messageType:  "Annotations",
+			expectedBody: expectedAnnotationsOutputBody,
 		},
 		{
-			name: "Use Consumed Kafka Message Headers",
+			name:         "Suggestions Message without Headers",
+			headers:      nil,
+			messageType:  "Suggestions",
+			expectedBody: expectedSuggestionsOutputBody,
+		},
+		{
+			name: "Use Incoming Kafka Message Headers",
 			headers: map[string]string{
 				"X-Request-Id":      transationID,
 				"Message-Timestamp": "2006-01-02T03:04:05.000Z",
@@ -58,19 +60,27 @@ func TestSendMessage(t *testing.T) {
 				"Content-Type":      "application/json",
 				"Origin-System-Id":  originSystem,
 			},
+			messageType:  "annotations",
+			expectedBody: expectedAnnotationsOutputBody,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err = f.SendMessage(transationID, originSystem, test.headers, message.UUID, message.Annotations)
+			p := new(mockProducer)
+			f := forwarder.Forwarder{
+				Producer:    p,
+				MessageType: test.messageType,
+			}
+
+			err = f.SendMessage(transationID, originSystem, test.headers, inputMessage.UUID, inputMessage.Annotations)
 			if err != nil {
 				t.Error("Error sending message")
 			}
 
 			res := p.getLastMessage()
-			if res.Body != string(body) {
-				t.Errorf("Unexpected Kafka message processed, expected: \n`%s`\n\n but recevied: \n`%s`", string(body), res.Body)
+			if res.Body != fmt.Sprintf(test.expectedBody, res.Headers["Message-Timestamp"]) {
+				t.Errorf("Unexpected Kafka message processed, expected: \n`%s`\n\n but recevied: \n`%s`", test.expectedBody, res.Body)
 			}
 			if res.Headers["X-Request-Id"] != transationID {
 				t.Errorf("Unexpected Kafka X-Request-Id, expected `%s` but recevied `%s`", transationID, res.Headers["X-Request-Id"])
