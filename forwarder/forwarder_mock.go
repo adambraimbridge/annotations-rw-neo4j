@@ -8,10 +8,9 @@ import (
 
 type MockForwarder struct {
 	mock.Mock
-	Forwarder
 }
 
-func (mf *MockForwarder) SendMessage(transactionID string, originSystem string, headers map[string]string, uuid string, annotations annotations.Annotations) error {
-	args := mf.Called(transactionID, originSystem, headers, uuid, annotations)
+func (mf *MockForwarder) SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error {
+	args := mf.Called(transactionID, originSystem, uuid, annotations)
 	return args.Error(0)
 }
