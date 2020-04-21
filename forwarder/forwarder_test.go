@@ -56,7 +56,7 @@ func TestSendMessage(t *testing.T) {
 				"X-Request-Id":      transationID,
 				"Message-Timestamp": "2006-01-02T03:04:05.000Z",
 				"Message-Id":        "07109c55-3870-4260-8f77-d242c1014e9f",
-				"Message-Type":      "concept-annotations",
+				"Message-Type":      "concept-annotation",
 				"Content-Type":      "application/json",
 				"Origin-System-Id":  originSystem,
 			},
