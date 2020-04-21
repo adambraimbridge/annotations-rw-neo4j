@@ -66,7 +66,7 @@ func (qh *queueHandler) Ingest() {
 		//forward message to the next queue
 		if qh.forwarder != nil {
 			qh.log.WithTransactionID(tid).WithUUID(annMsg.UUID).Debug("Forwarding message to the next queue")
-			return qh.forwarder.SendMessage(tid, originSystem, message.Headers, annMsg.UUID, annMsg.Annotations)
+			return qh.forwarder.SendMessage(tid, originSystem, annMsg.UUID, annMsg.Annotations)
 		}
 		return nil
 	})
