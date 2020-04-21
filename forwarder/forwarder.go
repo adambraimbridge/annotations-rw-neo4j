@@ -58,7 +58,7 @@ func (f Forwarder) CreateHeaders(transactionID string, originSystem string) map[
 		"X-Request-Id":      transactionID,
 		"Message-Timestamp": time.Now().Format(dateFormat),
 		"Message-Id":        messageUUID.String(),
-		"Message-Type":      "concept-annotations",
+		"Message-Type":      "concept-annotation",
 		"Content-Type":      "application/json",
 		"Origin-System-Id":  originSystem,
 	}
