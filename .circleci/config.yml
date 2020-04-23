@@ -16,5 +16,18 @@ workflows:
   snyk-scanning:
     jobs:
       - ft-golang-ci/scan:
+          filters:
+            branches:
+              only:
+                - master
           name: scan-dependencies
           context: cm-team-snyk
+          monitor-on-build: true
+      - ft-golang-ci/scan:
+          filters:
+            branches:
+              ignore:
+                - master
+          name: scan-dependencies
+          context: cm-team-snyk
+          monitor-on-build: false
