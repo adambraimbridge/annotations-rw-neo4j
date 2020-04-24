@@ -2,14 +2,13 @@ package main
 
 import (
 	"net/http"
+	"time"
+
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
 
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 	"github.com/Financial-Times/service-status-go/gtg"
-
-	"time"
-
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
 )
 
 type healthCheckHandler struct {

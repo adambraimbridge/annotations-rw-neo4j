@@ -1,7 +1,7 @@
 package forwarder
 
 import (
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
 
 	"github.com/stretchr/testify/mock"
 )

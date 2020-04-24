@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/forwarder"
 
 	logger "github.com/Financial-Times/go-logger/v2"
 	transactionidutils "github.com/Financial-Times/transactionid-utils-go"
