@@ -21,7 +21,7 @@ type QueueHandlerTestSuite struct {
 	message            kafka.FTMessage
 	queueMessage       queueMessage
 	annotationsService *mockAnnotationsService
-	forwarder          *forwarder.MockForwarder
+	forwarder          *mockForwarder
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	tid                string
@@ -34,7 +34,7 @@ func (suite *QueueHandlerTestSuite) SetupTest() {
 	suite.log = logger.NewUPPInfoLogger("annotations-rw")
 	suite.tid = "tid_sample"
 	suite.originSystem = "http://cmdb.ft.com/systems/methode-web-pub"
-	suite.forwarder = new(forwarder.MockForwarder)
+	suite.forwarder = new(mockForwarder)
 	suite.headers = forwarder.CreateHeaders(suite.tid, suite.originSystem)
 	suite.body, err = ioutil.ReadFile("exampleAnnotationsMessage.json")
 	assert.NoError(suite.T(), err, "Unexpected error")

@@ -3,8 +3,21 @@ package main
 import (
 	"encoding/json"
 
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
+
+	"github.com/Financial-Times/kafka-client-go/kafka"
+
 	"github.com/stretchr/testify/mock"
 )
+
+type mockForwarder struct {
+	mock.Mock
+}
+
+func (mf *mockForwarder) SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error {
+	args := mf.Called(transactionID, originSystem, uuid, annotations)
+	return args.Error(0)
+}
 
 type mockAnnotationsService struct {
 	mock.Mock
@@ -37,4 +50,20 @@ func (as *mockAnnotationsService) Count(annotationLifecycle string, platformVers
 func (as *mockAnnotationsService) Initialise() error {
 	args := as.Called()
 	return args.Error(0)
+}
+
+type mockConsumer struct {
+	message kafka.FTMessage
+	err     error
+}
+
+func (mc mockConsumer) StartListening(messageHandler func(message kafka.FTMessage) error) {
+	_ = messageHandler(mc.message)
+}
+
+func (mc mockConsumer) Shutdown() {
+}
+
+func (mc mockConsumer) ConnectivityCheck() error {
+	return mc.err
 }
