@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
-	"github.com/Financial-Times/annotations-rw-neo4j/v4/forwarder"
 
 	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/kafka-client-go/kafka"
@@ -32,7 +31,7 @@ type HttpHandlerTestSuite struct {
 	body               []byte
 	annotations        annotations.Annotations
 	annotationsService *mockAnnotationsService
-	forwarder          *forwarder.MockForwarder
+	forwarder          *mockForwarder
 	message            kafka.FTMessage
 	healthCheckHandler healthCheckHandler
 	originMap          map[string]string
@@ -52,7 +51,7 @@ func (suite *HttpHandlerTestSuite) SetupTest() {
 	assert.NoError(suite.T(), err, "Unexpected error")
 
 	suite.annotationsService = new(mockAnnotationsService)
-	suite.forwarder = new(forwarder.MockForwarder)
+	suite.forwarder = new(mockForwarder)
 	suite.tid = "tid_sample"
 
 	suite.healthCheckHandler = healthCheckHandler{}
