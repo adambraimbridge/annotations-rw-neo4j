@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
 	"github.com/Financial-Times/kafka-client-go/kafka"
 
 	uuid "github.com/satori/go.uuid"

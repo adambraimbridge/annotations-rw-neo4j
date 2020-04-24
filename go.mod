@@ -1,6 +1,6 @@
-module github.com/Financial-Times/annotations-rw-neo4j/v3
+module github.com/Financial-Times/annotations-rw-neo4j/v4
 
-go 1.13
+go 1.14
 
 require (
 	github.com/Financial-Times/go-fthealth v0.0.0-20180807113633-3d8eb430d5b5

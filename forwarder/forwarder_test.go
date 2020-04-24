@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/forwarder"
 
 	"github.com/Financial-Times/kafka-client-go/kafka"
 )

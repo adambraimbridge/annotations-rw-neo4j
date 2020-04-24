@@ -10,8 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/forwarder"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/forwarder"
 
 	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/http-handlers-go/v2/httphandlers"
