@@ -66,9 +66,9 @@ func TestHttpHandlerTestSuite(t *testing.T) {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
 	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(nil)
-	suite.forwarder.On("SendMessage", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	suite.forwarder.On("SendMessage", suite.tid, "http://cmdb.ft.com/systems/methode-web-pub", knownUUID, suite.annotations).Return(nil).Once()
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
-	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Request-Id", suite.tid)
 	handler := httpHandler{suite.annotationsService, suite.forwarder, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
 	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
@@ -79,7 +79,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_Success() {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ParseError() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", []byte(`{"id": "1234"}`))
-	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Request-Id", suite.tid)
 	handler := httpHandler{suite.annotationsService, suite.forwarder, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
 	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
@@ -88,7 +88,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_ParseError() {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ValidationError() {
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", []byte(`"{"thing": {"prefLabel": "Apple"}`))
-	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Request-Id", suite.tid)
 	handler := httpHandler{suite.annotationsService, suite.forwarder, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
 	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
@@ -106,7 +106,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_NotJson() {
 func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
 	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(errors.New("Write failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
-	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Request-Id", suite.tid)
 	handler := httpHandler{suite.annotationsService, suite.forwarder, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
 	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
@@ -116,7 +116,7 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_WriteFailed() {
 func (suite *HttpHandlerTestSuite) TestPutHandler_InvalidPredicate() {
 	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(annotations.UnsupportedPredicateErr)
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
-	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Request-Id", suite.tid)
 	handler := httpHandler{suite.annotationsService, suite.forwarder, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
 	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
@@ -125,9 +125,9 @@ func (suite *HttpHandlerTestSuite) TestPutHandler_InvalidPredicate() {
 
 func (suite *HttpHandlerTestSuite) TestPutHandler_ForwardingFailed() {
 	suite.annotationsService.On("Write", knownUUID, annotationLifecycle, platformVersion, suite.tid, suite.annotations).Return(nil)
-	suite.forwarder.On("SendMessage", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("forwarding failed"))
+	suite.forwarder.On("SendMessage", suite.tid, "http://cmdb.ft.com/systems/methode-web-pub", knownUUID, suite.annotations).Return(errors.New("forwarding failed"))
 	request := newRequest("PUT", fmt.Sprintf("/content/%s/annotations/%s", knownUUID, annotationLifecycle), "application/json", suite.body)
-	request.Header.Add("X-Request-Id", "tid_sample")
+	request.Header.Add("X-Request-Id", suite.tid)
 	handler := httpHandler{suite.annotationsService, suite.forwarder, suite.originMap, suite.lifecycleMap, suite.messageType, suite.log}
 	rec := httptest.NewRecorder()
 	router(&handler, &suite.healthCheckHandler, suite.log).ServeHTTP(rec, request)
