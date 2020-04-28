@@ -3,30 +3,28 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
-	"io"
-	"time"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/annotations"
+	"github.com/Financial-Times/annotations-rw-neo4j/v4/forwarder"
 
-	"github.com/Financial-Times/annotations-rw-neo4j/v3/annotations"
 	logger "github.com/Financial-Times/go-logger/v2"
-	"github.com/Financial-Times/kafka-client-go/kafka"
-	"github.com/Financial-Times/transactionid-utils-go"
+	transactionidutils "github.com/Financial-Times/transactionid-utils-go"
+
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/twinj/uuid"
 )
 
 const (
-	dateFormat            = "2006-01-02T03:04:05.000Z0700"
 	lifecyclePropertyName = "annotationLifecycle"
 )
 
 //service def
 type httpHandler struct {
 	annotationsService annotations.Service
-	producer           kafka.Producer
+	forwarder          forwarder.QueueForwarder
 	originMap          map[string]string
 	lifecycleMap       map[string]string
 	messageType        string
@@ -168,6 +166,18 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var originSystem string
+	for k, v := range hh.originMap {
+		if v == lifecycle {
+			originSystem = k
+			break
+		}
+	}
+	if originSystem == "" {
+		writeJSONError(w, "No Origin-System-Id could be deduced from the lifecycle parameter", http.StatusBadRequest)
+		return
+	}
+
 	anns, err := decode(r.Body)
 	if err != nil {
 		msg := fmt.Sprintf("Error (%v) parsing annotation request", err)
@@ -196,20 +206,9 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	}
 	hh.log.WithMonitoringEvent("SaveNeo4j", tid, hh.messageType).WithUUID(uuid).Infof("%s successfully written in Neo4j", hh.messageType)
 
-	if hh.producer != nil {
-		var originSystem string
-		for k, v := range hh.originMap {
-			if v == lifecycle {
-				originSystem = k
-				break
-			}
-		}
-		if originSystem == "" {
-			writeJSONError(w, "no origin-system-id could be deduced for the lifecycle parameter", http.StatusBadRequest)
-			return
-		}
-
-		err = hh.forwardMessage(uuid, anns, tid, originSystem)
+	if hh.forwarder != nil {
+		hh.log.WithTransactionID(tid).WithUUID(uuid).Debug("Forwarding message to the next queue")
+		err = hh.forwarder.SendMessage(tid, originSystem, platformVersion, uuid, anns)
 		if err != nil {
 			msg := "Failed to forward message to queue"
 			hh.log.WithTransactionID(tid).WithUUID(uuid).WithError(err).Error(msg)
@@ -222,23 +221,6 @@ func (hh *httpHandler) PutAnnotations(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(jsonMessage(fmt.Sprintf("Annotations for content %s created", uuid))))
 	return
-}
-
-func (hh *httpHandler) forwardMessage(uuid string, anns annotations.Annotations, tid string, originSystem string) error {
-
-	msg := map[string]interface{}{
-		"uuid":         uuid,
-		hh.messageType: anns,
-	}
-
-	headers := createHeader(tid, originSystem)
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	hh.log.WithTransactionID(tid).WithUUID(uuid).Debug("Forwarding message to the next queue")
-	return hh.producer.SendMessage(kafka.NewFTMessage(headers, string(body)))
 }
 
 func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int) {
@@ -262,15 +244,4 @@ func isContentTypeJSON(r *http.Request) error {
 		return errors.New("Http Header 'Content-Type' is not 'application/json', this is a JSON API")
 	}
 	return nil
-}
-
-func createHeader(tid string, originSystem string) map[string]string {
-	return map[string]string{
-		"X-Request-Id":      tid,
-		"Message-Timestamp": time.Now().Format(dateFormat),
-		"Message-Id":        uuid.NewV4().String(),
-		"Message-Type":      "concept-annotations",
-		"Content-Type":      "application/json",
-		"Origin-System-Id":  originSystem,
-	}
 }
