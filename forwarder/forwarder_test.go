@@ -23,8 +23,8 @@ const transactionID = "example-transaction-id"
 const originSystem = "http://cmdb.ft.com/systems/pac"
 
 func TestSendMessage(t *testing.T) {
-	const expectedAnnotationsOutputBody = `{"payload":{"annotations":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://annotations-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
-	const expectedSuggestionsOutputBody = `{"payload":{"suggestions":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://suggestions-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
+	const expectedAnnotationsOutputBody = `{"payload":{"annotations":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://pac.annotations-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
+	const expectedSuggestionsOutputBody = `{"payload":{"suggestions":[{"thing":{"id":"http://api.ft.com/things/2cca9e2a-2248-3e48-abc1-93d718b91bbe","prefLabel":"China Politics \u0026 Policy","types":["http://www.ft.com/ontology/Topic"],"predicate":"majorMentions"},"provenances":[{"scores":[{"scoringSystem":"http://api.ft.com/scoringsystem/FT-RELEVANCE-SYSTEM","value":1},{"scoringSystem":"http://api.ft.com/scoringsystem/FT-CONFIDENCE-SYSTEM","value":1}]}]}],"uuid":"3a636e78-5a47-11e7-9bc8-8055f264aa8b"},"contentUri":"http://v2.suggestions-rw-neo4j.svc.ft.com/annotations/3a636e78-5a47-11e7-9bc8-8055f264aa8b","lastModified":"%s"}`
 
 	body, err := ioutil.ReadFile("../exampleAnnotationsMessage.json")
 	if err != nil {
@@ -36,19 +36,22 @@ func TestSendMessage(t *testing.T) {
 		t.Fatal("Unexpected error unmarshalling example message")
 	}
 	tests := []struct {
-		name         string
-		messageType  string
-		expectedBody string
+		name            string
+		messageType     string
+		platformVersion string
+		expectedBody    string
 	}{
 		{
-			name:         "Annotations Message",
-			messageType:  "Annotations",
-			expectedBody: expectedAnnotationsOutputBody,
+			name:            "Annotations Message",
+			messageType:     "Annotations",
+			platformVersion: "pac",
+			expectedBody:    expectedAnnotationsOutputBody,
 		},
 		{
-			name:         "Suggestions Message",
-			messageType:  "Suggestions",
-			expectedBody: expectedSuggestionsOutputBody,
+			name:            "Suggestions Message",
+			messageType:     "Suggestions",
+			platformVersion: "v2",
+			expectedBody:    expectedSuggestionsOutputBody,
 		},
 	}
 
@@ -60,7 +63,7 @@ func TestSendMessage(t *testing.T) {
 				MessageType: test.messageType,
 			}
 
-			err = f.SendMessage(transactionID, originSystem, inputMessage.UUID, inputMessage.Annotations)
+			err = f.SendMessage(transactionID, originSystem, test.platformVersion, inputMessage.UUID, inputMessage.Annotations)
 			if err != nil {
 				t.Error("Error sending message")
 			}

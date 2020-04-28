@@ -26,7 +26,7 @@ type outputMessage struct {
 
 // QueueForwarder is the interface implemented by types that can send annotation messages to a queue.
 type QueueForwarder interface {
-	SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error
+	SendMessage(transactionID string, originSystem string, platformVersion string, uuid string, annotations annotations.Annotations) error
 }
 
 // A Forwarder facilitates sending a message to Kafka via kafka.Producer.
@@ -36,9 +36,9 @@ type Forwarder struct {
 }
 
 // SendMessage marshals an annotations payload using the outputMessage format and sends it to a Kafka.
-func (f Forwarder) SendMessage(transactionID string, originSystem string, uuid string, annotations annotations.Annotations) error {
+func (f Forwarder) SendMessage(transactionID string, originSystem string, platformVersion string, uuid string, annotations annotations.Annotations) error {
 	headers := CreateHeaders(transactionID, originSystem)
-	body, err := f.prepareBody(uuid, annotations, headers["Message-Timestamp"])
+	body, err := f.prepareBody(platformVersion, uuid, annotations, headers["Message-Timestamp"])
 	if err != nil {
 		return err
 	}
@@ -46,13 +46,13 @@ func (f Forwarder) SendMessage(transactionID string, originSystem string, uuid s
 	return f.Producer.SendMessage(kafka.NewFTMessage(headers, body))
 }
 
-func (f Forwarder) prepareBody(uuid string, anns annotations.Annotations, lastModified string) (string, error) {
+func (f Forwarder) prepareBody(platformVersion string, uuid string, anns annotations.Annotations, lastModified string) (string, error) {
 	wrappedMsg := outputMessage{
 		Payload: map[string]interface{}{
 			strings.ToLower(f.MessageType): anns,
 			"uuid":                         uuid,
 		},
-		ContentURI:   "http://" + strings.ToLower(f.MessageType) + "-rw-neo4j.svc.ft.com/annotations/" + uuid,
+		ContentURI:   "http://" + platformVersion + "." + strings.ToLower(f.MessageType) + "-rw-neo4j.svc.ft.com/annotations/" + uuid,
 		LastModified: lastModified,
 	}
 
