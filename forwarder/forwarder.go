@@ -50,6 +50,7 @@ func (f Forwarder) prepareBody(platformVersion string, uuid string, anns annotat
 	wrappedMsg := outputMessage{
 		Payload: map[string]interface{}{
 			strings.ToLower(f.MessageType): anns,
+			"lastModified":                 lastModified,
 			"uuid":                         uuid,
 		},
 		ContentURI:   "http://" + platformVersion + "." + strings.ToLower(f.MessageType) + "-rw-neo4j.svc.ft.com/annotations/" + uuid,
