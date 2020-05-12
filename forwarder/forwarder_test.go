@@ -97,7 +97,7 @@ func TestCreateHeaders(t *testing.T) {
 		}
 	}
 
-	const dateFormat = "2006-01-02T03:04:05.000Z0700"
+	const dateFormat = "2006-01-02T15:04:05.000Z0700"
 	if _, err := time.Parse(dateFormat, headers["Message-Timestamp"]); err != nil {
 		t.Errorf("Unexpected Message-Timestamp format, expected `%s` but recevied `%s`", dateFormat, headers["Message-Timestamp"])
 	}
