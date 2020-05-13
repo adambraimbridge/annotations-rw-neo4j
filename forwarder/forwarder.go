@@ -70,7 +70,7 @@ func (f Forwarder) prepareBody(platformVersion string, uuid string, anns annotat
 // CreateHeaders returns the relevant map with all the necessary kafka.FTMessage headers
 // according to the specified transaction ID and origin system.
 func CreateHeaders(transactionID string, originSystem string) map[string]string {
-	const dateFormat = "2006-01-02T03:04:05.000Z0700"
+	const dateFormat = "2006-01-02T15:04:05.000Z0700"
 	messageUUID, _ := uuid.NewV4()
 	return map[string]string{
 		"X-Request-Id":      transactionID,
