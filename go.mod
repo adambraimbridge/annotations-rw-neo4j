@@ -16,12 +16,15 @@ require (
 	github.com/Financial-Times/up-rw-app-api-go v0.0.0-20170710125828-d9d93a1f6895 // indirect
 	github.com/Shopify/sarama v1.23.1 // indirect
 	github.com/frankban/quicktest v1.4.2 // indirect
+	github.com/golang/mock v1.4.3 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
 	github.com/hashicorp/go-version v1.0.0 // indirect
 	github.com/jawher/mow.cli v1.0.4
 	github.com/jmcvetta/neoism v1.3.1
 	github.com/jmcvetta/randutil v0.0.0-20150817122601-2bb1b664bcff // indirect
+	github.com/neo4j-drivers/gobolt v1.7.4 // indirect
+	github.com/neo4j/neo4j-go-driver v1.7.4
 	github.com/pierrec/lz4 v2.3.0+incompatible // indirect
 	github.com/pkg/errors v0.8.0
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a

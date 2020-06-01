@@ -21,6 +21,7 @@ import (
 
 	"github.com/gorilla/mux"
 	cli "github.com/jawher/mow.cli"
+	"github.com/neo4j/neo4j-go-driver/neo4j"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -32,6 +33,12 @@ func main() {
 		Value:  "http://localhost:7474/db/data",
 		Desc:   "neo4j endpoint URL",
 		EnvVar: "NEO_URL",
+	})
+	neoRoutingURL := app.String(cli.StringOpt{
+		Name:   "neoRoutingUrl",
+		Value:  "bolt+routing://localhost:7687",
+		Desc:   "Neo4j endpoint URL with bolt+routing protocol",
+		EnvVar: "NEO_ROUTING_URL",
 	})
 	port := app.Int(cli.IntOpt{
 		Name:   "port",
@@ -109,7 +116,7 @@ func main() {
 		log := logger.NewUPPLogger(*appName, *logLevel, logConf)
 		log.WithFields(map[string]interface{}{"port": *port, "neoURL": *neoURL}).Infof("Service %s has successfully started.", *appName)
 
-		annotationsService, err := setupAnnotationsService(*neoURL, *batchSize)
+		annotationsService, err := setupAnnotationsService(*neoURL, *neoRoutingURL, *batchSize)
 		if err != nil {
 			log.WithError(err).Fatal("can't initialise annotations service")
 		}
@@ -177,6 +184,12 @@ func main() {
 			log.Infof("Shutting down Kafka consumer")
 			qh.consumer.Shutdown()
 		}
+
+		log.Infof("Closing Neo4j connections")
+		err = annotationsService.Shutdown()
+		if err != nil {
+			log.WithError(err).Error("An error occurred while closing the Neo4j connections")
+		}
 	}
 
 	err := app.Run(os.Args)
@@ -186,22 +199,28 @@ func main() {
 	}
 }
 
-func setupAnnotationsService(neoURL string, bathSize int) (annotations.Service, error) {
+func setupAnnotationsService(neoURL, neoRoutingURL string, bathSize int) (annotations.Service, error) {
 	conf := neoutils.DefaultConnectionConfig()
 	conf.BatchSize = bathSize
 	db, err := neoutils.Connect(neoURL, conf)
-
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to Neo4j: %w", err)
 	}
 
-	annotationsService := annotations.NewCypherAnnotationsService(db)
+	driver, err := neo4j.NewDriver(neoRoutingURL, neo4j.NoAuth(), func(config *neo4j.Config) {
+		config.Log = neo4j.ConsoleLogger(neo4j.ERROR)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error setting up Neo4j driver: %w", err)
+	}
+
+	annotationsService := annotations.NewCypherAnnotationsService(db, driver)
 	err = annotationsService.Initialise()
 	if err != nil {
 		return nil, fmt.Errorf("annotations service has not been initialised correctly: %w", err)
 	}
 
-	return annotations.NewCypherAnnotationsService(db), nil
+	return annotationsService, nil
 }
 
 func setupMessageProducer(brokerAddress string, producerTopic string) (kafka.Producer, error) {

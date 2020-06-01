@@ -51,6 +51,10 @@ func (as *mockAnnotationsService) Initialise() error {
 	args := as.Called()
 	return args.Error(0)
 }
+func (as *mockAnnotationsService) Shutdown() error {
+	args := as.Called()
+	return args.Error(0)
+}
 
 type mockConsumer struct {
 	message kafka.FTMessage

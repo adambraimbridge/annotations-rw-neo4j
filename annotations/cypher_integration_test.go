@@ -7,9 +7,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Financial-Times/go-logger"
+	logger "github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
+	"github.com/neo4j/neo4j-go-driver/neo4j"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,8 +27,8 @@ const (
 
 func TestConstraintsApplied(t *testing.T) {
 	assert := assert.New(t)
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	defer cleanDB(t, assert)
 
 	err := annotationsService.Initialise()
@@ -55,8 +56,8 @@ func TestConstraintsApplied(t *testing.T) {
 func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 
 	conceptWithoutID := Annotations{Annotation{
 		Thing: Thing{
@@ -85,8 +86,8 @@ func TestWriteFailsWhenNoConceptIDSupplied(t *testing.T) {
 }
 
 func TestWriteFailsForInvalidPredicate(t *testing.T) {
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	conceptWithInvalidPredicate := Annotation{
 		Thing: Thing{ID: fmt.Sprintf("http://api.ft.com/things/%s", oldConceptUUID),
 			PrefLabel: "prefLabel",
@@ -116,8 +117,8 @@ func TestWriteFailsForInvalidPredicate(t *testing.T) {
 func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	annotationsToDelete := exampleConcepts(conceptUUID)
 
 	assert.NoError(annotationsService.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToDelete), "Failed to write annotation")
@@ -145,8 +146,8 @@ func TestDeleteRemovesAnnotationsButNotConceptsOrContent(t *testing.T) {
 func TestWriteAllValuesPresent(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	annotationsToWrite := exampleConcepts(conceptUUID)
 
 	assert.NoError(annotationsService.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, annotationsToWrite), "Failed to write annotation")
@@ -159,8 +160,8 @@ func TestWriteAllValuesPresent(t *testing.T) {
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecycle(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	defer cleanDB(t, assert)
 
 	testSetupQuery := &neoism.CypherQuery{
@@ -207,8 +208,8 @@ func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithoutLifecy
 func TestWriteDoesNotRemoveExistingIsClassifiedByBrandRelationshipsWithContentLifeCycle(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	defer cleanDB(t, assert)
 	contentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid:{contentUuid}}) SET n :Thing
@@ -257,8 +258,8 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 	logger.InitDefaultLogger("annotations-rw")
 
 	defer cleanDB(t, assert)
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 
 	createContentQuery := &neoism.CypherQuery{
 		Statement: `MERGE (c:Content{uuid:{contentUuid}}) SET c :Thing RETURN c.uuid`,
@@ -339,8 +340,8 @@ func TestWriteDoesRemoveExistingIsClassifiedForV1TermsAndTheirRelationships(t *t
 func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 
 	multiConceptAnnotations := Annotations{
 		Annotation{
@@ -395,8 +396,8 @@ func TestWriteAndReadMultipleAnnotations(t *testing.T) {
 func TestIfProvenanceGetsWrittenWithEmptyAgentRoleAndTimeValues(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 
 	assert.NoError(annotationsService.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, conceptWithoutAgent), "Failed to write annotation")
 	readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t, contentUUID, v2AnnotationLifecycle, conceptWithoutAgent)
@@ -407,8 +408,8 @@ func TestNextVideoAnnotationsUpdatesAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	defer cleanDB(t, assert)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 
 	contentQuery := &neoism.CypherQuery{
 		Statement: `CREATE (n:Thing {uuid:{contentUuid}})
@@ -457,8 +458,8 @@ func TestNextVideoAnnotationsUpdatesAnnotations(t *testing.T) {
 func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	oldAnnotationsToWrite := exampleConcepts(oldConceptUUID)
 
 	assert.NoError(annotationsService.Write(contentUUID, v2AnnotationLifecycle, v2PlatformVersion, tid, oldAnnotationsToWrite), "Failed to write annotations")
@@ -472,20 +473,28 @@ func TestUpdateWillRemovePreviousAnnotations(t *testing.T) {
 	cleanUp(t, contentUUID, v2AnnotationLifecycle, []string{conceptUUID, oldConceptUUID})
 }
 
-func getNeoConnection(t *testing.T) neoutils.NeoConnection {
-	assert := assert.New(t)
+func getNeoConnection(t *testing.T) (neoutils.NeoConnection, neo4j.Driver) {
+	t.Helper()
+
 	logger.InitDefaultLogger("annotations-rw")
 
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
 		url = "http://localhost:7474/db/data"
 	}
-
 	conf := neoutils.DefaultConnectionConfig()
 	conf.Transactional = false
 	db, err := neoutils.Connect(url, conf)
-	assert.NoError(err, "Failed to connect to Neo4j")
-	return db
+	if err != nil {
+		t.Fatal("Failed to connect to Neo4j")
+	}
+
+	driver, err := neo4j.NewDriver("bolt+routing://localhost:7687", neo4j.NoAuth())
+	if err != nil {
+		t.Fatal("Failed to create Neo4j driver")
+	}
+
+	return db, driver
 }
 
 func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUUID string, annotationLifecycle string, expectedAnnotations []Annotation) {
@@ -514,8 +523,8 @@ func readAnnotationsForContentUUIDAndCheckKeyFieldsMatch(t *testing.T, contentUU
 func checkNodeIsStillPresent(uuid string, t *testing.T) {
 	assert := assert.New(t)
 	logger.InitDefaultLogger("annotations-rw")
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	results := []struct {
 		UUID string `json:"uuid"`
 	}{}
@@ -548,7 +557,7 @@ func checkRelationship(t *testing.T, assert *assert.Assertions, contentID string
 		Result:     &results,
 	}
 
-	conn := getNeoConnection(t)
+	conn, _ := getNeoConnection(t)
 	err := conn.CypherBatch([]*neoism.CypherQuery{qs})
 	assert.NoError(err)
 	assert.Equal(1, len(results), "More results found than expected!")
@@ -557,8 +566,8 @@ func checkRelationship(t *testing.T, assert *assert.Assertions, contentID string
 
 func cleanUp(t *testing.T, contentUUID string, annotationLifecycle string, conceptUUIDs []string) {
 	assert := assert.New(t)
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	found, err := annotationsService.Delete(contentUUID, tid, annotationLifecycle)
 	assert.True(found, "Didn't manage to delete annotations for content uuid %s", contentUUID)
 	assert.NoError(err, "Error deleting annotations for content uuid %s", contentUUID)
@@ -573,8 +582,8 @@ func cleanUp(t *testing.T, contentUUID string, annotationLifecycle string, conce
 }
 
 func cleanDB(t *testing.T, assert *assert.Assertions) {
-	conn := getNeoConnection(t)
-	annotationsService = NewCypherAnnotationsService(conn)
+	conn, d := getNeoConnection(t)
+	annotationsService = NewCypherAnnotationsService(conn, d)
 	qs := []*neoism.CypherQuery{
 		{
 			Statement: "MATCH (mc:Thing {uuid: {contentUUID}}) DETACH DELETE mc",
