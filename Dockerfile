@@ -1,4 +1,4 @@
-FROM golang:1
+FROM coco/go-alpine-plus-seabolt:v1.3.0
 
 ENV PROJECT=annotations-rw-neo4j
 ENV ORG_PATH="github.com/Financial-Times"
@@ -13,8 +13,8 @@ RUN BUILDINFO_PACKAGE="${ORG_PATH}/service-status-go/buildinfo." \
     && REPOSITORY="repository=$(git config --get remote.origin.url)" \
     && REVISION="revision=$(git rev-parse HEAD)" \
     && BUILDER="builder=$(go version)" \
-    && LDFLAGS="-s -w -X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
-    && CGO_ENABLED=0 go build -mod=readonly -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}"
+    && LDFLAGS="-s -w -extldflags '-static' -X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
+    && CGO_ENABLED=1 go build -mod=readonly -a -o /artifacts/${PROJECT} -ldflags="${LDFLAGS}" -tags seabolt_static
 
 COPY ./suggestion-config.json /artifacts/suggestion-config.json
 COPY ./annotation-config.json /artifacts/annotation-config.json
