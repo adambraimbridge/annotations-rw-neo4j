@@ -40,6 +40,11 @@ spec:
             configMapKeyRef: 
               name: global-config 
               key: neo4j.read.write.url
+        - name: NEO_ROUTING_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-config
+              key: neo4j.bolt.routing.url
         - name: BATCH_SIZE 
           valueFrom: 
             configMapKeyRef: 
